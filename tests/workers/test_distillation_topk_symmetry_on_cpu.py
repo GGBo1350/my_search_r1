@@ -42,6 +42,7 @@ import torch
 from tensordict import TensorDict
 
 from verl.trainer.distillation.fsdp.losses import compute_forward_kl_topk as compute_fsdp_forward_kl_topk
+from verl.trainer.distillation.fsdp.losses import compute_reverse_kl_topk as compute_fsdp_reverse_kl_topk
 from verl.trainer.distillation.losses import compute_forward_kl_topk as collect_forward_kl_topk_metrics
 from verl.utils import tensordict_utils as tu
 from verl.utils.dataset.dataset_utils import DatasetPadMode
@@ -206,6 +207,53 @@ def test_forward_kl_topk_emits_overlap_metrics():
         dtype=output["overlap_token_advantage"].dtype,
     )
     torch.testing.assert_close(output["overlap_token_advantage"], expected_ota)
+
+
+def test_reverse_kl_topk_uses_teacher_support_plus_other_bucket():
+    logits = torch.tensor([[2.0, 1.0, 0.0, -1.0]], dtype=torch.float32).unsqueeze(0).requires_grad_(True)
+    teacher_ids = _nested_from_rows([[0, 2]]).to(torch.int64)
+    teacher_logprobs = _nested_from_rows(
+        [[torch.log(torch.tensor(0.55)), torch.log(torch.tensor(0.25))]]
+    ).to(torch.float32)
+    config = SimpleNamespace(distillation_loss=SimpleNamespace(log_prob_min_clamp=-20.0))
+
+    output = compute_fsdp_reverse_kl_topk(
+        student_logits=logits,
+        teacher_topk_log_probs=teacher_logprobs,
+        teacher_topk_ids=teacher_ids,
+        config=config,
+        data_format="thd",
+    )
+
+    student_probs = torch.softmax(logits, dim=-1)
+    student_support = torch.stack(
+        (student_probs[..., 0], student_probs[..., 2], student_probs[..., 1] + student_probs[..., 3]), dim=-1
+    )
+    teacher_support = torch.tensor([[[0.55, 0.25, 0.20]]])
+    expected = (student_support * (student_support.log() - teacher_support.log())).sum(dim=-1)
+
+    torch.testing.assert_close(output["distillation_losses"], expected)
+    assert output["distillation_losses"].item() >= 0.0
+    output["distillation_losses"].sum().backward()
+    assert logits.grad is not None and torch.isfinite(logits.grad).all()
+
+
+def test_reverse_kl_topk_is_zero_when_coarsened_distributions_match():
+    student_probs = torch.tensor([0.55, 0.15, 0.25, 0.05])
+    logits = student_probs.log().view(1, 1, -1)
+    teacher_ids = _nested_from_rows([[0, 2]]).to(torch.int64)
+    teacher_logprobs = _nested_from_rows([[student_probs[0].log(), student_probs[2].log()]]).to(torch.float32)
+    config = SimpleNamespace(distillation_loss=SimpleNamespace(log_prob_min_clamp=-20.0))
+
+    output = compute_fsdp_reverse_kl_topk(
+        student_logits=logits,
+        teacher_topk_log_probs=teacher_logprobs,
+        teacher_topk_ids=teacher_ids,
+        config=config,
+        data_format="thd",
+    )
+
+    torch.testing.assert_close(output["distillation_losses"], torch.zeros((1, 1)), atol=1e-7, rtol=0.0)
 
 
 def test_forward_kl_topk_metric_aggregation_for_overlap_outputs():

@@ -134,15 +134,25 @@ def compute_topk_loss(
     - student_mass: (bsz, seqlen/cp_size)
     - teacher_mass: (bsz, seqlen/cp_size)
     """
+    loss_mode = distillation_config.distillation_loss.loss_mode
     match config.strategy:
         # VeOmni uses FSDP2 internally, so its loss computation is identical to FSDP.
         case "fsdp" | "veomni":
             import verl.trainer.distillation.fsdp.losses as fsdp_losses
 
-            distillation_loss_fn = fsdp_losses.compute_forward_kl_topk
+            if loss_mode == "forward_kl_topk":
+                distillation_loss_fn = fsdp_losses.compute_forward_kl_topk
+            elif loss_mode == "reverse_kl_topk":
+                distillation_loss_fn = fsdp_losses.compute_reverse_kl_topk
+            else:
+                raise ValueError(f"Unsupported top-k distillation loss for FSDP: {loss_mode}")
         case "megatron":
             import verl.trainer.distillation.megatron.losses as megatron_losses
 
+            if loss_mode != "forward_kl_topk":
+                raise NotImplementedError(
+                    f"Top-k distillation loss {loss_mode!r} is not implemented for Megatron; use FSDP."
+                )
             distillation_loss_fn = megatron_losses.compute_forward_kl_topk
         case _:
             raise NotImplementedError(f"Unsupported strategy: {config.strategy=}")
@@ -291,14 +301,16 @@ def distillation_loss(
     return distillation_loss, distillation_metrics
 
 
-@register_distillation_loss(DistillationLossSettings(names=["forward_kl_topk"], use_topk=True))  # type: ignore[arg-type]
+@register_distillation_loss(
+    DistillationLossSettings(names=["forward_kl_topk", "reverse_kl_topk"], use_topk=True)
+)  # type: ignore[arg-type]
 def compute_forward_kl_topk(
     config: ActorConfig,
     distillation_config: DistillationConfig,
     model_output: dict,
     data: TensorDict,
 ) -> tuple[torch.Tensor, dict[str, Any]]:
-    """Compute forward KL distillation loss and related metrics using top-k log probabilities.
+    """Collect top-k KL loss and related metrics computed by the logits processor.
 
     Returns:
     - distillation_losses: (bsz, resp_len)

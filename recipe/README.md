@@ -60,6 +60,7 @@ Phase 2 从另一份 Base student 出发，用 student 自身 on-policy 轨迹�
 
 1. Bridge `global_step_75` + Comparison `global_step_25` 双 teacher，按题型路由并计算 Top-k forward KL。
 2. Phase 1 `global_step_100` 单 teacher，使用 sample-token `k=3` OPD；student 与 teacher adapter 都覆盖 `q/k/v/o_proj` 和 `gate/up/down_proj`。
+3. 双 teacher Reverse Top-k：在 teacher Top-k token 与一个剩余词表 `other` 桶组成的共享支持集上，直接优化 `KL(student || teacher)`。
 
 主要入口：
 
@@ -68,6 +69,7 @@ Phase 2 从另一份 Base student 出发，用 student 自身 on-policy 轨迹�
 - `phase2/extract_teacher_lora.py`：从 veRL actor checkpoint 导出 PEFT adapter。
 - `phase2/verify_teacher_adapters.py`：校验 adapter 完整性、rank 和目标模块。
 - `phase2/run_mopd_bridge_compare_2gpu_931.sh`：双 teacher Top-k OPD。
+- `phase2/run_mopd_bridge_compare_reverse_top32_2gpu.sh`：双 teacher Reverse Top-32 OPD（teacher Top-k + other 桶）。
 - `phase2/run_opd_phase1_s100_sample_token_1gpu_805.sh`：单 teacher sample-token OPD。
 - `phase2/run_eval_mopd_student_931.sh` 与 `phase2/run_eval_opd_phase1_s100_sample_token_checkpoints_805.sh`：固定集评测。
 

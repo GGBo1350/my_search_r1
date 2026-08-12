@@ -92,3 +92,79 @@ def compute_forward_kl_topk(
         "overlap_count": overlap_count,
         "overlap_token_advantage": overlap_token_advantage,
     }
+
+
+def compute_reverse_kl_topk(
+    student_logits: torch.Tensor,
+    teacher_topk_log_probs: torch.Tensor,
+    teacher_topk_ids: torch.Tensor,
+    config: DistillationConfig,
+    data_format: str,
+) -> dict[str, torch.Tensor]:
+    """Compute a coarse-grained reverse KL on the teacher top-k support.
+
+    The teacher server exposes its top-k probabilities, not arbitrary
+    student-selected token probabilities.  We therefore form a valid
+    ``k + 1`` categorical distribution from the teacher top-k token IDs plus
+    one ``other`` bucket containing all remaining vocabulary mass, and compute
+    ``KL(student || teacher)`` on that shared support.
+
+    This is a teacher-top-k approximation to reverse KL, not the full-vocabulary
+    reverse KL and not the single-sampled-token k3 estimator.
+    """
+    del data_format  # FSDP uses the same layout for THD and BSHD here.
+    assert teacher_topk_log_probs.is_nested and teacher_topk_ids.is_nested
+    teacher_topk_log_probs = teacher_topk_log_probs.values().unsqueeze(0)
+    teacher_topk_ids = teacher_topk_ids.values().unsqueeze(0)
+
+    if get_ulysses_sequence_parallel_world_size() > 1:
+        teacher_topk_log_probs = slice_input_tensor(teacher_topk_log_probs, dim=1)
+        teacher_topk_ids = slice_input_tensor(teacher_topk_ids, dim=1)
+    assert teacher_topk_log_probs.shape[:2] == teacher_topk_ids.shape[:2] == student_logits.shape[:2]
+
+    student_log_probs = F.log_softmax(student_logits, dim=-1).float()
+    student_topk_ids = torch.topk(student_log_probs, k=teacher_topk_ids.shape[-1], dim=-1).indices
+    student_support_log_probs = torch.gather(student_log_probs, dim=-1, index=teacher_topk_ids)
+    teacher_support_log_probs = teacher_topk_log_probs.float()
+    student_support_probs = student_support_log_probs.exp()
+    teacher_support_probs = teacher_support_log_probs.exp()
+    student_mass = student_support_probs.sum(dim=-1)
+    teacher_mass = teacher_support_probs.sum(dim=-1)
+
+    loss_config: DistillationLossConfig = config.distillation_loss
+    min_log_prob = loss_config.log_prob_min_clamp
+    if min_log_prob is None:
+        min_log_prob = -20.0
+    min_prob = torch.exp(torch.tensor(min_log_prob, dtype=torch.float32, device=student_logits.device))
+
+    # SGLang can return a top-k mass microscopically above one because of
+    # reduced-precision serialization.  Clamp the residual and renormalize the
+    # augmented distributions so the computed quantity remains a proper KL.
+    student_other = (1.0 - student_mass).clamp_min(min_prob).unsqueeze(-1)
+    teacher_other = (1.0 - teacher_mass).clamp_min(min_prob).unsqueeze(-1)
+    student_augmented = torch.cat((student_support_probs, student_other), dim=-1).clamp_min(min_prob)
+    teacher_augmented = torch.cat((teacher_support_probs, teacher_other), dim=-1).clamp_min(min_prob)
+    student_augmented = student_augmented / student_augmented.sum(dim=-1, keepdim=True)
+    teacher_augmented = teacher_augmented / teacher_augmented.sum(dim=-1, keepdim=True)
+    distillation_losses = (
+        student_augmented * (student_augmented.log() - teacher_augmented.log())
+    ).sum(dim=-1)
+
+    overlap_mask = (teacher_topk_ids.unsqueeze(-1) == student_topk_ids.unsqueeze(-2)).any(dim=-1)
+    overlap_count = overlap_mask.sum(dim=-1)
+    support_reverse_kl = student_augmented[..., :-1] * (
+        student_augmented[..., :-1].log() - teacher_augmented[..., :-1].log()
+    )
+    overlap_token_advantage_sum = (-support_reverse_kl * overlap_mask).sum(dim=-1)
+    overlap_token_advantage = overlap_token_advantage_sum / overlap_count.clamp_min(1)
+    overlap_token_advantage = torch.where(
+        overlap_count > 0, overlap_token_advantage, torch.zeros_like(overlap_token_advantage)
+    )
+
+    return {
+        "distillation_losses": distillation_losses,
+        "student_mass": student_mass,
+        "teacher_mass": teacher_mass,
+        "overlap_count": overlap_count,
+        "overlap_token_advantage": overlap_token_advantage,
+    }

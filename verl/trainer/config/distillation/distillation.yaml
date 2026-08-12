@@ -23,7 +23,8 @@ distillation_loss:
   # Loss function mode for distillation
   loss_mode: k3
 
-  # If distillation loss requires top-k logits, this is the value of k
+  # If distillation loss requires top-k logits (forward_kl_topk or
+  # reverse_kl_topk), this is the value of k.
   topk: 32
 
   # Whether to include task rewards alongside distillation loss.

@@ -203,6 +203,20 @@ bash recipe/phase2/run_opd_phase1_s100_sample_token_1gpu_805.sh
 
 该路线关闭 task reward 与 policy-gradient distillation，teacher 只返回 student 实际采样 token 的 log-prob，并以 k3 reverse-KL 样本估计直接反传。脚本会校验 teacher/student 均覆盖全 7 投影。
 
+### 双 teacher Reverse Top-32 OPD
+
+```bash
+STUDENT_MODEL=/path/to/Qwen3-4B \
+TEACHER_BASE_MODEL=/path/to/Qwen3-4B \
+BRIDGE_TEACHER_ADAPTER=/path/to/bridge_s75/lora_adapter \
+COMPARE_TEACHER_ADAPTER=/path/to/compare_s25/lora_adapter \
+TRAIN_FILE=/path/to/train_opd_routed.parquet \
+TEST_FILE=/path/to/validation_opd_routed.parquet \
+bash recipe/phase2/run_mopd_bridge_compare_reverse_top32_2gpu.sh
+```
+
+当前 teacher 服务不能按每个位置的 student Top-k ID 任意查询概率，因此该实现使用 teacher Top-32 token 加一个聚合剩余词表概率的 `other` 桶，在这个共享的 33 类支持集上计算 `KL(student || teacher)`。它是有效的粗粒度 Reverse KL，不是完整词表 Reverse KL，也不同于单采样 token 的 k3 估计和 `OPD-main` 中由本地全 logits teacher 支持的 `only_stu` 实现。
+
 ## 评测
 
 固定 200 条 greedy 评测：

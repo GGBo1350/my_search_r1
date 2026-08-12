@@ -279,6 +279,9 @@ Distillation divergence to use. Default: `"k3"`.
 Two registered families:
 
 - **Top-k** (`forward_kl_topk`): forward KL using the teacher's top-k logits.
+- **Reverse Top-k** (`reverse_kl_topk`): reverse KL on the shared categorical
+  support formed by the teacher top-k tokens plus one bucket for all remaining
+  vocabulary mass. This is a coarse-grained reverse KL, not full-vocabulary KL.
 - **Single-sample KL estimators** (`kl`, `k1`, `abs`, `mse`, `k2`,
   `low_var_kl`, `k3`): per-token Monte Carlo estimators of reverse KL
   computed from the student's `log_probs` and the teacher's single
@@ -410,7 +413,20 @@ $$
 \bigr].
 $$
 
-The reason GKD OPD is implemented only over the teacher top-$k$ logits is because current inference servers return log-probabilities for the sampled token and the teacher top-$k$ tokens, but do not support gathering log-probabilities at arbitrary token IDs. Therefore, the implementation supports teacher-top-$k$ forward KL, but not student-top-$k$ reverse KL.
+Current inference servers return log-probabilities for the sampled token and
+the teacher top-$k$ tokens, but do not support gathering teacher probabilities
+at arbitrary per-position student top-$k$ IDs. The implementation therefore
+supports the teacher-top-$k$ forward KL above and a coarse-grained reverse KL.
+For `reverse_kl_topk`, the common categorical support is the teacher top-$k$
+tokens plus one `other` bucket containing all remaining vocabulary mass. This
+is a valid KL on the coarsened distribution, but it is not the exact
+full-vocabulary or student-top-$k$ reverse KL.
+
+The separate `OPD-main` implementation can use an `only_stu` strategy because
+its teacher is an in-process FSDP reward model with full logits: the student
+selects its top-$k$ IDs first, then the teacher gathers probabilities at those
+IDs. That dataflow is not available in the current routed SGLang multi-teacher
+pipeline, so the two objectives must not be treated as equivalent.
 
 To use GKD OPD, set `loss_mode=forward_kl_topk`, choose `topk`, and disable policy-gradient distillation:
 
@@ -421,6 +437,11 @@ distillation:
       topk: 128
       use_policy_gradient: false
 ```
+
+For the coarse-grained reverse direction, use `loss_mode=reverse_kl_topk`
+with the same `topk` and `use_policy_gradient=false` settings. The reverse
+Top-k implementation currently supports the FSDP/VeOmni loss path; Megatron
+raises an explicit `NotImplementedError`.
 
 Do not use `forward_kl_topk` with `use_policy_gradient=true`. The top-$k$ loss contains distributional information for many teacher-preferred tokens, but a policy-gradient update only acts through the sampled token:
 
@@ -739,7 +760,7 @@ The returned scalar loss is what `engine.train_batch` backpropagates.
 - `verl/experimental/teacher_loop/teacher_model.py` — `MultiTeacherModelManager` and `TeacherModelManager`; spin up teacher inference replicas on the dedicated teacher resource pool and expose per-teacher `LLMServerClient` factories
 - `verl/experimental/teacher_loop/teacher_manager.py` — `AsyncTeacherLLMServerManager`; routes per-sample teacher calls (single- or multi-teacher) and builds teacher sampling params
 - `verl/experimental/agent_loop/agent_loop.py` — `AgentLoopWorker._compute_teacher_logprobs`; per-sample teacher dispatch from `_agent_loop_postprocess`, packs `teacher_logprobs` into the rollout output
-- `verl/trainer/distillation/fsdp/losses.py` — FSDP backend `compute_forward_kl_topk`
+- `verl/trainer/distillation/fsdp/losses.py` — FSDP backend `compute_forward_kl_topk` and coarse-grained `compute_reverse_kl_topk`
 - `verl/trainer/distillation/megatron/losses.py` — Megatron backend `compute_forward_kl_topk`
 - `verl/workers/engine_workers.py` — `ActorRolloutRefWorker.init_model`; binds `distillation_ppo_loss` as the actor's `loss_fn` when distillation is enabled
 - `verl/workers/engine/{fsdp,megatron}/transformer_impl.py` — training-engine forward steps; invoke `distillation_ppo_loss` first as a logits processor (top-$k$ modes) and again as the final loss
