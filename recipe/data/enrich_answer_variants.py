@@ -244,9 +244,21 @@ def read_rows(path: Path) -> tuple[list[dict[str, Any]], pa.Schema]:
 
 def write_rows(path: Path, rows: list[dict[str, Any]], schema: pa.Schema) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Infer the updated nested schema so extra_info.answer_variants is really
-    # persisted; forcing the input schema would silently discard that new key.
-    table = pa.Table.from_pylist(rows).replace_schema_metadata(schema.metadata)
+    # Preserve every original column type, but infer an extended extra_info
+    # struct so answer_variants is not silently discarded by the old schema.
+    arrays: list[pa.Array] = []
+    fields: list[pa.Field] = []
+    for field in schema:
+        values = [row.get(field.name) for row in rows]
+        if field.name == "extra_info":
+            array = pa.array(values)
+            fields.append(pa.field(field.name, array.type, field.nullable, field.metadata))
+        else:
+            array = pa.array(values, type=field.type)
+            fields.append(field)
+        arrays.append(array)
+    output_schema = pa.schema(fields, metadata=schema.metadata)
+    table = pa.Table.from_arrays(arrays, schema=output_schema)
     pq.write_table(table, path, compression="zstd")
 
 

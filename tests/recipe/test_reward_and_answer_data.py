@@ -58,6 +58,7 @@ def test_no_strategy_converter_changes_only_prompt(tmp_path):
 
 def test_answer_variants_are_persisted_in_nested_extra_info(tmp_path):
     source_row = {
+        "index": 7,
         "reward_model": {"style": "rule", "ground_truth": ["Steven Williams"]},
         "extra_info": {"id": "row-1", "question": "Who?"},
     }
@@ -71,4 +72,4 @@ def test_answer_variants_are_persisted_in_nested_extra_info(tmp_path):
 
     assert loaded["reward_model"]["ground_truth"] == variants
     assert loaded["extra_info"]["answer_variants"] == variants
-
+    assert pq.read_schema(output).field("index").type == source_schema.field("index").type
