@@ -244,7 +244,10 @@ def read_rows(path: Path) -> tuple[list[dict[str, Any]], pa.Schema]:
 
 def write_rows(path: Path, rows: list[dict[str, Any]], schema: pa.Schema) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    pq.write_table(pa.Table.from_pylist(rows, schema=schema), path)
+    # Infer the updated nested schema so extra_info.answer_variants is really
+    # persisted; forcing the input schema would silently discard that new key.
+    table = pa.Table.from_pylist(rows).replace_schema_metadata(schema.metadata)
+    pq.write_table(table, path, compression="zstd")
 
 
 async def run(args: argparse.Namespace) -> None:

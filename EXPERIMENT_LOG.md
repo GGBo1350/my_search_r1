@@ -152,8 +152,8 @@
 
 **配置**
 
-- 奖励 `my_reward_answer_only.py`：答案仅严格 exact（对=1，不完全一样=0，无 F1、无 LLM 判定）；保留超次调用惩罚（整条轨迹 >4 次起每个扣 0.05）和"至少一次有效检索才有答案分"门控；retrieval/strategy/query/format 权重全 0。
-- Prompt `data_preprocess_no_strategy.py`：删掉策略要求（比较题并行双查、桥接题串行、3 次搜索上限）和并行查询说明，只保留"可用 search 工具查询"的基本协议 + grounding + 答案格式。
+- 奖励 `recipe/core/my_reward_exact_only.py`（旧实验文件名 `my_reward_answer_only.py`）：答案仅严格 exact（对=1，不完全一样=0，无 F1 奖励、无 LLM 判定）；保留超次调用惩罚（整条轨迹 >4 次起每个扣 0.05）和“至少一次有效检索才有答案分”门控；retrieval/strategy/query/format 权重全 0。
+- Prompt `recipe/data/data_preprocess_no_strategy.py`：删掉策略要求（比较题并行双查、桥接题串行、3 次搜索上限）和并行查询说明，只保留“可用 search 工具查询”的基本协议 + grounding + 答案格式。
 - 数据：`data/hotpotqa_v3_no_strategy/`（1600 训练 / 200 验证，system 提示策略关键词 0 残留）。
 - 训练：50 步，bs16×n8、mini 4、max_response 4096，其余同 Phase 1。
 

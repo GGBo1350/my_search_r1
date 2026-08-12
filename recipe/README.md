@@ -26,6 +26,13 @@ export DEEPSEEK_API_KEY=your_key
 python recipe/data/deepseek_clean_hard_data.py \
   --output-dir data/processed/search_r1_clean
 
+# 可选：基于 gold evidence 生成同一答案的表面变体；建议先 --max-rows 20
+python recipe/data/enrich_answer_variants.py \
+  --train-file data/processed/search_r1_clean/train.parquet \
+  --validation-file data/processed/search_r1_clean/validation.parquet \
+  --output-dir data/processed/search_r1_clean_variants \
+  --max-rows 20
+
 python recipe/data/build_hybrid_index.py \
   --train data/processed/search_r1_clean/train.parquet \
   --validation data/processed/search_r1_clean/validation.parquet \
@@ -40,6 +47,8 @@ python recipe/data/build_hybrid_index.py \
 
 API 审核逐条追加到 JSONL 缓存，可中断续跑；默认目标为 1200 Bridge + 400 Comparison 训练样本，以及各 100 条的验证样本。
 
+`enrich_answer_variants.py` 保留原 gold，并只依据 gold evidence 构造同一实体的全名、昵称、简称等表面形式；最多 8 个，写入 `reward_model.ground_truth` 和 `extra_info.answer_variants`。完整数据构建与奖励说明见 [`docs/search_r1_reward_and_data.md`](../docs/search_r1_reward_and_data.md)。
+
 ## Phase 1：GRPO 路线
 
 Phase 1 用答案、召回、格式和搜索拓扑奖励直接训练一个通用学生模型：Bridge 学习串行两跳，Comparison 学习同轮并行双查。
@@ -49,8 +58,11 @@ Phase 1 用答案、召回、格式和搜索拓扑奖励直接训练一个通用
 - `phase1/run_sglang_train_4b_full_lora_125step_939.sh`：Qwen3-4B、全 7 类线性投影 LoRA，训练 125 step，每 25 step 保存。
 - `phase1/run_eval_full_lora_checkpoints_805.sh`：对五个 checkpoint 串行执行固定 200 条 greedy 评测。
 - `phase1/analyze_full_lora_checkpoints.py`：复算整体、Bridge 和 Comparison 指标。
+- `data/data_preprocess_no_strategy.py` + `core/my_reward_exact_only.py` + `phase1/run_exact_answer_only_50step.sh`：严格 Exact Answer-only 消融。
 
 固定集结果的最佳 checkpoint 为 `global_step_100`：Exact 0.590、Mean F1 0.720、Strategy 0.915；继续至 step 125 后出现回落。
+
+复合奖励权重为 Answer F1/Exact `0.35/0.15`、gold-title Recall `0.30`、Strategy `0.15`、Format `0.05`；答案分要求至少一次成功搜索。`ANSWER_LLM_JUDGE=1` 可在部分匹配时调用 LLM 判断语义等价，但固定集比较统一设置为 0。严格 Exact-only 对照则只保留搜索门控后的 `EM` 与超次调用惩罚。
 
 ## Phase 2：OPD 路线
 

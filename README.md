@@ -120,7 +120,24 @@ python recipe/data/data_preprocess.py \
   --filter_answer_leakage
 ```
 
-### 3. 构建混合索引
+### 3. 扩增同一答案的表面变体（可选）
+
+[`enrich_answer_variants.py`](recipe/data/enrich_answer_variants.py) 将问题、原始 gold 和两条 gold evidence 交给 LLM，只生成同一实体的全名、简称、昵称或别名。原 gold 始终保留在首位，每题最多 8 个变体，结果写回 `reward_model.ground_truth` 与 `extra_info.answer_variants`；JSONL 缓存支持断点续跑。
+
+```bash
+export DEEPSEEK_API_KEY=your_key
+
+# 建议先检查 20 条，再移除 --max-rows 跑全量
+python recipe/data/enrich_answer_variants.py \
+  --train-file data/hotpotqa_v3_hard_1600/train.parquet \
+  --validation-file data/hotpotqa_v3_hard_1600/validation.parquet \
+  --output-dir data/hotpotqa_v3_hard_1600_variants_smoke \
+  --max-rows 20
+```
+
+答案变体推荐只用于训练；公开主评测继续使用未扩增的原始 validation gold，避免模型间口径变化。
+
+### 4. 构建混合索引
 
 索引包含 SQLite FTS5/BM25、Qwen3-Embedding-0.6B FAISS 向量检索和 Qwen3-Reranker-0.6B 重排：
 
@@ -178,7 +195,24 @@ bash recipe/phase1/run_sglang_train_4b_full_lora_125step_939.sh
 
 启动脚本中的机器编号只用于标记原始实验，不影响逻辑；路径和 logger 均可用环境变量覆盖。
 
-复合奖励位于 [`recipe/core/my_reward.py`](recipe/core/my_reward.py)，包括答案 F1/Exact、gold title recall、Bridge/Comparison 拓扑、格式，以及重复/过度搜索约束。至少一次成功检索后才开放答案分，减少模型绕过工具直接依赖参数记忆。
+复合奖励位于 [`recipe/core/my_reward.py`](recipe/core/my_reward.py)：`0.35×Answer F1 + 0.15×Exact + 0.30×gold-title Recall + 0.15×Strategy + 0.05×Format`，并扣除重复查询和第 5 次起的过度搜索惩罚。至少一次成功检索后才开放答案分，减少模型绕过工具直接依赖参数记忆。
+
+可设置 `ANSWER_LLM_JUDGE=1`，让 LLM 只对“规则 F1>0 但尚未 Exact”的答案判断语义等价；失败重试一次后回退规则分数。LLM judge 会改变训练 reward，因此固定评测一律关闭。完整公式、环境变量和回退行为见 [`docs/search_r1_reward_and_data.md`](docs/search_r1_reward_and_data.md)。
+
+### Strict Exact Answer-only 消融
+
+仓库同时提供 README 结果表中的 Exact-only 对照：先用 [`data_preprocess_no_strategy.py`](recipe/data/data_preprocess_no_strategy.py) 删除 Bridge/Comparison 的显式策略提示，再用 [`my_reward_exact_only.py`](recipe/core/my_reward_exact_only.py) 只奖励一次成功搜索后的严格 Exact 命中；F1、Recall、Strategy 与 Format 仅记录，不参与得分，LLM judge 强制关闭。
+
+```bash
+python recipe/data/data_preprocess_no_strategy.py \
+  --train-file data/hotpotqa_v3_hard_1600/train.parquet \
+  --validation-file data/hotpotqa_v3_hard_1600/validation.parquet \
+  --output-dir data/hotpotqa_v3_no_strategy
+
+MODEL_PATH=/path/to/Qwen3-4B \
+ARTIFACT_ROOT=/path/to/artifacts \
+bash recipe/phase1/run_exact_answer_only_50step.sh
+```
 
 ### 双 teacher OPD
 
@@ -250,9 +284,11 @@ bash recipe/phase1/run_eval_full_lora_checkpoints_805.sh
 - **并行搜索执行**：同一 assistant turn 的多个 search 并发执行并保留调用分组；
 - **混合检索**：SQLite FTS5/BM25 + FAISS + Reranker；
 - **题型可计算策略指标**：Bridge `[1,1]`、Comparison `[2]`；
+- **可切换奖励口径**：复合规则奖励、可选 LLM 语义裁判与严格 Exact-only 消融；
+- **答案多样性**：基于 gold evidence 的受约束表面变体扩增、缓存与 Parquet 回写；
 - **静态 LoRA teacher**：SGLang 加载 base + adapter，teacher 只评分不生成；
 - **多 teacher 路由**：根据样本 `teacher_route` 选择 teacher；
-- **两种蒸馏目标**：top-k forward KL 与 sample-token k3；
+- **三种蒸馏目标**：top-k forward KL、sample-token k3 与粗粒度 reverse top-k；
 - **共置显存治理**：teacher/rollout sleep 与 KV cache 释放、并发限制、独立 GPU memory utilization；
 - **严格 checkpoint 选择**：不按最后一步或训练 loss 选模型。
 
@@ -276,7 +312,10 @@ Checkpoint、模型权重、原始/清洗数据、索引、rollout、日志、Sw
 ## 测试
 
 ```bash
-pytest -q tests/recipe/test_v3.py tests/recipe/test_search_r1_mopd_colocation.py
+pytest -q \
+  tests/recipe/test_v3.py \
+  tests/recipe/test_reward_and_answer_data.py \
+  tests/recipe/test_search_r1_mopd_colocation.py
 ```
 
 GPU 端到端训练仍需按实际 CUDA、SGLang、FlashInfer 和显存条件验证；公开仓库不附带模型权重或训练机器环境。
