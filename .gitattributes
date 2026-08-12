@@ -1,0 +1,9 @@
+* text=auto
+
+# 训练在 Linux/AutoDL 上运行，强制脚本与配置使用 LF，避免 Windows 上传后出现 ^M。
+*.sh text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+# Unified diff 的空白上下文行必须保留一个前导空格，不按行尾空格报错。
+*.patch text eol=lf whitespace=-blank-at-eol

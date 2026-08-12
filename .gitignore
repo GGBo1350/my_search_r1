@@ -1,0 +1,164 @@
+**/*.pt
+**/checkpoints
+**/wget-log
+**/_build/
+**/*.ckpt
+**/outputs
+**/*.tar.gz
+**/playground
+**/wandb
+
+/pyrightconfig.json
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+dataset/*
+tensorflow/my_graph/*
+.idea/
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+# env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+tmp/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+.hypothesis/
+pytest.ini
+output.txt
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# IPython Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# dotenv
+.env
+
+# virtualenv
+venv/
+.venv/
+ENV/
+!**/workers/env/
+
+# Spyder project settings
+.spyderproject
+
+# Rope project settings
+.ropeproject
+
+# vscode
+.vscode
+
+# Mac
+.DS_Store
+
+# vim
+*.swp
+
+# emacs
+*~
+
+# ckpt
+*.lock
+
+# data
+*.parquet
+
+# Search-R1 本地数据、模型与实验平台缓存不提交到代码仓库
+/data/
+/models/
+/wandb/
+/swanlog/
+/swanlab/
+/checkpoints/
+/rollouts/
+/train_logs/
+
+# 本地任务、IDE、AI 客户端与临时归档
+/.agent/
+/.claude/
+/.codex/
+/.gemini/
+/.vscode/
+/.archive_staging/
+/.tmp_remote*/
+/.pytest_cache/
+/.ruff_cache/
+
+# 本仓库不继承上游 verl 的 CI；公开版只发布项目源码和可复现入口
+/.github/
+
+# 私有交接、简历与面试材料
+/*HANDOFF*.md
+/*INTERVIEW*.md
+/*RESUME*.md
+/面试文档/
+/search_program简历面试文档/
+
+
+# local logs
+logs
+log
+outputs
+.history

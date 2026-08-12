@@ -1,0 +1,36 @@
+tools:
+  - class_name: recipe.core.my_tools.HotpotSearchTool
+    config:
+      type: native
+      backend: hybrid
+      database_path: data/hotpotqa_v3_hard_1600/hybrid_index/documents.sqlite
+      faiss_index_path: data/hotpotqa_v3_hard_1600/hybrid_index/documents.faiss
+      embedding_model_path: /root/autodl-tmp/models/Qwen--Qwen3-Embedding-0.6B/snapshots/master
+      embedding_device: cuda
+      embedding_max_length: 512
+      hybrid_candidate_topk: 20
+      rrf_k: 60
+      bm25_weight: 1.0
+      dense_weight: 1.0
+      reranker_enabled: true
+      reranker_model_path: /root/autodl-tmp/models/Qwen--Qwen3-Reranker-0.6B/snapshots/master
+      reranker_device: cuda
+      reranker_topk: 5
+      reranker_max_length: 1024
+      reranker_batch_size: 5
+      topk: 1
+      title_weight: 3
+      max_document_chars: 2400
+    tool_schema:
+      type: function
+      function:
+        name: search
+        description: Search the local document collection for passages relevant to a factual query.
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
+              description: A concise, entity-focused search query.
+          required:
+            - query
