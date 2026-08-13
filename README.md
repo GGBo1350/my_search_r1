@@ -243,9 +243,10 @@ bash recipe/phase2/run_mopd_bridge_compare_2gpu_931.sh
 
 样本通过顶层 `teacher_route=bridge|compare` 路由。旧 Parquet 可用 `add_teacher_route.py` 转换，并用 `verify_opd_routes.py` 校验。
 
-### Bridge→Comparison 串行 Sample-K3 OPD
+### Bridge→Comparison 单卡串行 Sample-K3 OPD
 
-该消融从另一份 Qwen3-4B Base student 独立初始化，先在 1200 条 Bridge 数据上使用
+该消融使用一张 GPU，从另一份 Qwen3-4B Base student 独立初始化。每个阶段只共置当前所需
+的一位 teacher，不会同时加载 Bridge 与 Comparison teacher。先在 1200 条 Bridge 数据上使用
 Bridge teacher 训练 75 step，再仅继承 student 模型、优化器、LR scheduler 与 RNG 状态，在
 400 条 Comparison 数据上使用 Comparison teacher 训练 25 step，最终到
 `global_step_100`。交接目录不包含 `data.pt`，因此不会把 Bridge dataloader 游标错误加载到
@@ -261,7 +262,7 @@ cd /root/autodl-tmp/my_search_r1_eval
 RUN_ID=$(date +%Y%m%d_%H%M%S) \
 ARTIFACT_ROOT=/root/autodl-tmp \
 TRAINER_LOGGER='["console","swanlab"]' \
-bash recipe/phase2/run_serial_bridge_then_compare_sample_k3_2gpu_931.sh
+bash recipe/phase2/run_serial_bridge_then_compare_sample_k3_1gpu_931.sh
 ```
 
 两个新入口使用不同实验目录且拒绝覆盖非空 checkpoint、rollout 或日志路径。这些是待运行

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reusable two-GPU, single-teacher Sample-K3 OPD stage for 931.
+# Reusable single-GPU, single-teacher Sample-K3 OPD stage for 931.
 
 set -euo pipefail
 
@@ -37,8 +37,8 @@ if [[ ! -s "${TEACHER_ADAPTER}/adapter_config.json" || ! -s "${TEACHER_ADAPTER}/
     exit 3
 fi
 available_gpus=$(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null | wc -l)
-if (( available_gpus < 2 )); then
-    echo "This Sample-K3 stage requires two visible GPUs; found ${available_gpus}." >&2
+if (( available_gpus < 1 )); then
+    echo "This Sample-K3 stage requires one visible GPU; found ${available_gpus}." >&2
     exit 3
 fi
 if [[ -d "${CHECKPOINT_DIR}" ]] && find "${CHECKPOINT_DIR}" -mindepth 1 -print -quit | grep -q .; then
@@ -86,7 +86,7 @@ export FLASHINFER_ENABLE_AOT=${FLASHINFER_ENABLE_AOT:-1}
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
 export MODEL_PATH="${STUDENT_MODEL}"
 export TRAIN_FILE TEST_FILE PYTHON_BIN TOOL_CONFIG_PATH
-export NGPUS_PER_NODE=2 NNODES=1 ROLLOUT_TP=1
+export NGPUS_PER_NODE=1 NNODES=1 ROLLOUT_TP=1
 export LORA_RANK=32 LORA_ALPHA=64 LORA_TARGET_MODULES="${FULL_LORA_TARGETS}"
 export ACTOR_LR=${ACTOR_LR:-5e-6}
 export ACTOR_USE_KL_LOSS=False
@@ -115,9 +115,9 @@ export ROLLOUT_MAX_NUM_SEQS=${ROLLOUT_MAX_NUM_SEQS:-4}
 export ROLLOUT_ENABLE_SLEEP_MODE=True
 export ROLLOUT_FREE_CACHE_ENGINE=True
 
-export AGENT_NUM_WORKERS=${AGENT_NUM_WORKERS:-4}
-export AGENT_TOOL_GPU_DEVICES=${AGENT_TOOL_GPU_DEVICES:-'[0,1]'}
-export REWARD_NUM_WORKERS=${REWARD_NUM_WORKERS:-4}
+export AGENT_NUM_WORKERS=${AGENT_NUM_WORKERS:-2}
+export AGENT_TOOL_GPU_DEVICES=${AGENT_TOOL_GPU_DEVICES:-'[0]'}
+export REWARD_NUM_WORKERS=${REWARD_NUM_WORKERS:-2}
 export RAY_NUM_CPUS=${RAY_NUM_CPUS:-8}
 export TOTAL_EPOCHS=${TOTAL_EPOCHS:-1}
 # Serial stages use one shared 100-step optimizer/LR-scheduler horizon. The
@@ -139,7 +139,7 @@ TEACHER_MAX_NUM_SEQS=${TEACHER_MAX_NUM_SEQS:-4}
 
 echo "STAGE_NAME=${STAGE_NAME}"
 echo "DISTILLATION_LOSS_MODE=k3 USE_TASK_REWARDS=False USE_POLICY_GRADIENT=False"
-echo "TEACHER_TP=1 TEACHER_NUM_REPLICAS=2"
+echo "GPU_PROFILE=1gpu TEACHER_TP=1 TEACHER_NUM_REPLICAS=1"
 echo "TEACHER_ADAPTER=${TEACHER_ADAPTER}"
 echo "TRAIN_FILE=${TRAIN_FILE}"
 echo "RESUME_MODE=${RESUME_MODE} RESUME_FROM_PATH=${RESUME_FROM_PATH:-none}"
@@ -151,7 +151,7 @@ exec bash "${TRAIN_ENTRY}" \
     +actor_rollout_ref.rollout.engine_kwargs.sglang.attention_backend="${ROLLOUT_ATTENTION_BACKEND}" \
     +actor_rollout_ref.rollout.agent.tool_gpu_devices="${AGENT_TOOL_GPU_DEVICES}" \
     distillation.enabled=True \
-    distillation.n_gpus_per_node=2 \
+    distillation.n_gpus_per_node=1 \
     distillation.nnodes=1 \
     distillation.colocate_with_actor=True \
     distillation.teacher_key=teacher_route \

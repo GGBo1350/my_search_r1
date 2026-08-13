@@ -37,7 +37,7 @@ OPD student 从独立的 Qwen3-4B Base 初始化，在自身 on-policy 搜索轨
 
 - 全 7 投影 LoRA 的 Bridge s75 + Comparison s25 双静态 teacher，按 `teacher_route` 路由，Top-k forward KL。
 - Phase 1 s100 单静态 teacher，sample-token `k=3` 蒸馏。
-- 两项待运行的 931 双卡对照入口：路由双 teacher Forward-KL Top-32；以及 Base student 内部按 Bridge 75 step → Comparison 25 step 连续训练的 Sample-K3 串行消融。
+- 两项待运行的 931 对照入口：双卡路由双 teacher Forward-KL Top-32；以及单卡 Base student 内部按 Bridge 75 step → Comparison 25 step 连续训练的 Sample-K3 串行消融。
 - teacher 与 student adapter 的模块、rank、文件完整性在训练前 fail-closed 校验。
 - 训练时记录 teacher probability mass、token overlap、蒸馏 loss 与工具执行指标到 SwanLab。
 

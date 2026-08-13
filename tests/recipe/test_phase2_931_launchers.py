@@ -30,7 +30,7 @@ def test_reverse_top32_wrapper_explicitly_selects_reverse_profile():
 
 
 def test_serial_k3_launcher_runs_bridge_then_compare_with_state_only_handoff():
-    script = _script("run_serial_bridge_then_compare_sample_k3_2gpu_931.sh")
+    script = _script("run_serial_bridge_then_compare_sample_k3_1gpu_931.sh")
 
     bridge_stage = script.index("STAGE_NAME=bridge")
     compare_stage = script.index("STAGE_NAME=compare")
@@ -49,11 +49,13 @@ def test_serial_k3_launcher_runs_bridge_then_compare_with_state_only_handoff():
 
 
 def test_single_teacher_serial_stage_is_reward_free_sample_k3():
-    script = _script("run_single_teacher_sample_k3_2gpu_931.sh")
+    script = _script("run_single_teacher_sample_k3_1gpu_931.sh")
 
     assert "distillation.distillation_loss.loss_mode=k3" in script
     assert "distillation.distillation_loss.topk=null" in script
     assert "distillation.distillation_loss.use_task_rewards=False" in script
     assert "distillation.distillation_loss.use_policy_gradient=False" in script
+    assert "NGPUS_PER_NODE=1 NNODES=1 ROLLOUT_TP=1" in script
+    assert "distillation.n_gpus_per_node=1" in script
     assert "distillation.teacher_models.teacher_model.inference.tensor_model_parallel_size=1" in script
     assert "trainer.del_local_ckpt_after_load=False" in script

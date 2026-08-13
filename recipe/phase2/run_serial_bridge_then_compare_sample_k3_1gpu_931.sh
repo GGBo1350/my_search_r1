@@ -22,8 +22,8 @@ BRIDGE_TRAIN_FILE=${BRIDGE_TRAIN_FILE:-${REPO_ROOT}/data/hotpotqa_v3_hard_1600/t
 COMPARE_TRAIN_FILE=${COMPARE_TRAIN_FILE:-${REPO_ROOT}/data/hotpotqa_v3_hard_1600/train_compare_400.parquet}
 TEST_FILE=${TEST_FILE:-${REPO_ROOT}/data/hotpotqa_v3_hard_1600/validation.parquet}
 
-BRIDGE_EXPERIMENT_NAME=${BRIDGE_EXPERIMENT_NAME:-qwen3_4b_opd_serial_k3_bridge_s75_all7_lora_2gpu_${RUN_ID}}
-COMPARE_EXPERIMENT_NAME=${COMPARE_EXPERIMENT_NAME:-qwen3_4b_opd_serial_k3_bridge_then_compare_s100_all7_lora_2gpu_${RUN_ID}}
+BRIDGE_EXPERIMENT_NAME=${BRIDGE_EXPERIMENT_NAME:-qwen3_4b_opd_serial_k3_bridge_s75_all7_lora_1gpu_${RUN_ID}}
+COMPARE_EXPERIMENT_NAME=${COMPARE_EXPERIMENT_NAME:-qwen3_4b_opd_serial_k3_bridge_then_compare_s100_all7_lora_1gpu_${RUN_ID}}
 BRIDGE_CHECKPOINT_DIR=${BRIDGE_CHECKPOINT_DIR:-${ARTIFACT_ROOT}/checkpoints/${BRIDGE_EXPERIMENT_NAME}}
 COMPARE_CHECKPOINT_DIR=${COMPARE_CHECKPOINT_DIR:-${ARTIFACT_ROOT}/checkpoints/${COMPARE_EXPERIMENT_NAME}}
 BRIDGE_ROLLOUT_DIR=${BRIDGE_ROLLOUT_DIR:-${ARTIFACT_ROOT}/rollouts/${BRIDGE_EXPERIMENT_NAME}}
@@ -34,8 +34,8 @@ MASTER_LOG=${MASTER_LOG:-${ARTIFACT_ROOT}/train_logs/opd_serial_bridge_then_comp
 HANDOFF_STEP=${HANDOFF_STEP:-${ARTIFACT_ROOT}/opd_handoffs/serial_bridge_then_compare_k3_${RUN_ID}/global_step_75}
 
 available_gpus=$(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null | wc -l)
-if (( available_gpus < 2 )); then
-    echo "This serial Sample-K3 experiment requires two visible GPUs; found ${available_gpus}." >&2
+if (( available_gpus < 1 )); then
+    echo "This serial Sample-K3 experiment requires one visible GPU; found ${available_gpus}." >&2
     exit 3
 fi
 if [[ "${TRAIN_BATCH_SIZE:-16}" != "16" ]]; then
@@ -72,6 +72,7 @@ exec > >(tee -a "${MASTER_LOG}") 2>&1
 echo "RUN_ID=${RUN_ID}"
 echo "CURRICULUM=bridge_s75_then_compare_s100"
 echo "DISTILLATION_LOSS_MODE=k3"
+echo "GPU_PROFILE=1gpu"
 
 ARTIFACT_ROOT="${ARTIFACT_ROOT}" \
 PYTHON_BIN="${PYTHON_BIN}" \
@@ -97,7 +98,7 @@ BASE_MODEL="${BASE_MODEL}" \
 STUDENT_MODEL="${BASE_MODEL}" \
 TRAIN_BATCH_SIZE=16 TOTAL_EPOCHS=1 TOTAL_TRAINING_STEPS=100 \
 SAVE_FREQ=25 MAX_ACTOR_CKPT_TO_KEEP=3 \
-    bash "${SCRIPT_DIR}/run_single_teacher_sample_k3_2gpu_931.sh" "$@"
+    bash "${SCRIPT_DIR}/run_single_teacher_sample_k3_1gpu_931.sh" "$@"
 
 BRIDGE_STEP="${BRIDGE_CHECKPOINT_DIR}/global_step_75"
 for step in 25 50 75; do
@@ -136,7 +137,7 @@ BASE_MODEL="${BASE_MODEL}" \
 STUDENT_MODEL="${BASE_MODEL}" \
 TRAIN_BATCH_SIZE=16 TOTAL_EPOCHS=4 TOTAL_TRAINING_STEPS=100 \
 SAVE_FREQ=100 MAX_ACTOR_CKPT_TO_KEEP=1 \
-    bash "${SCRIPT_DIR}/run_single_teacher_sample_k3_2gpu_931.sh" "$@"
+    bash "${SCRIPT_DIR}/run_single_teacher_sample_k3_1gpu_931.sh" "$@"
 
 if [[ ! -d "${COMPARE_CHECKPOINT_DIR}/global_step_100/actor" ]]; then
     echo "Comparison stage did not produce global_step_100." >&2
