@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 export DISTILLATION_LOSS_MODE=reverse_kl_topk
 export DISTILLATION_TOPK=${DISTILLATION_TOPK:-32}
+export DISTILLATION_PROFILE=reverse_top32
 export PROJECT_NAME=${PROJECT_NAME:-search_r1_hotpotqa_v3_mopd_reverse_topk}
 export EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_mopd_bridge_s75_compare_s25_reverse_top${DISTILLATION_TOPK}_all7_lora_r32_2gpu_$(date +%Y%m%d_%H%M%S)}
 

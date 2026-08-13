@@ -84,7 +84,10 @@ Phase 2 从另一份 Base student 出发，用 student 自身 on-policy 轨迹�
 - `phase2/verify_opd_routes.py`：逐条验证路由与题型一致性。
 - `phase2/extract_teacher_lora.py`：从 veRL actor checkpoint 导出 PEFT adapter。
 - `phase2/verify_teacher_adapters.py`：校验 adapter 完整性、rank 和目标模块。
-- `phase2/run_mopd_bridge_compare_2gpu_931.sh`：双 teacher Top-k OPD。
+- `phase2/prepare_full_lora_teacher_pair_931.sh`：从 931 保留的 Bridge s75 / Comparison s25 checkpoint 导出并校验全 7 投影 teacher adapter；完整产物可安全复用。
+- `phase2/run_mopd_bridge_compare_2gpu_931.sh`：双 teacher 路由的 Forward-KL Top-32 OPD。
+- `phase2/run_single_teacher_sample_k3_2gpu_931.sh`：串行消融内部复用的双卡单 teacher Sample-K3 阶段入口。
+- `phase2/run_serial_bridge_then_compare_sample_k3_2gpu_931.sh`：同一 Base student 先接受 Bridge teacher 75 step、再接受 Comparison teacher 25 step 的 Sample-K3 串行消融。
 - `phase2/run_mopd_bridge_compare_reverse_top32_2gpu.sh`：双 teacher Reverse Top-32 OPD（teacher Top-k + other 桶）。
 - `phase2/run_opd_phase1_s100_sample_token_1gpu_805.sh`：单 teacher sample-token OPD。
 - `phase2/run_eval_mopd_student_931.sh` 与 `phase2/run_eval_opd_phase1_s100_sample_token_checkpoints_805.sh`：固定集评测。

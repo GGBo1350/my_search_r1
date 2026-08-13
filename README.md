@@ -227,14 +227,42 @@ bash recipe/phase1/run_exact_answer_only_50step.sh
 
 ### 双 teacher OPD
 
+931 双卡入口固定使用 `forward_kl_topk/topk=32`。默认读取本项目保留的全 7 投影
+Bridge s75 与 Comparison s25 checkpoint；student 与两位 teacher 的 base 都固定来自同一
+Qwen3-4B Base。首次启动时会在 GPU 上导出并校验静态
+teacher adapter，已有完整 adapter 则直接复用：
+
 ```bash
-STUDENT_MODEL=/path/to/Qwen3-4B \
-BRIDGE_TEACHER_ADAPTER=/path/to/bridge_s75/lora_adapter \
-COMPARE_TEACHER_ADAPTER=/path/to/compare_s25/lora_adapter \
+cd /root/autodl-tmp/my_search_r1_eval
+
+RUN_ID=$(date +%Y%m%d_%H%M%S) \
+ARTIFACT_ROOT=/root/autodl-tmp \
+TRAINER_LOGGER='["console","swanlab"]' \
 bash recipe/phase2/run_mopd_bridge_compare_2gpu_931.sh
 ```
 
 样本通过顶层 `teacher_route=bridge|compare` 路由。旧 Parquet 可用 `add_teacher_route.py` 转换，并用 `verify_opd_routes.py` 校验。
+
+### Bridge→Comparison 串行 Sample-K3 OPD
+
+该消融从另一份 Qwen3-4B Base student 独立初始化，先在 1200 条 Bridge 数据上使用
+Bridge teacher 训练 75 step，再仅继承 student 模型、优化器、LR scheduler 与 RNG 状态，在
+400 条 Comparison 数据上使用 Comparison teacher 训练 25 step，最终到
+`global_step_100`。交接目录不包含 `data.pt`，因此不会把 Bridge dataloader 游标错误加载到
+Comparison 数据。两段均关闭 task reward 和 policy-gradient distillation，目标固定为
+sample-token `k=3`：
+
+```bash
+cd /root/autodl-tmp/my_search_r1_eval
+
+RUN_ID=$(date +%Y%m%d_%H%M%S) \
+ARTIFACT_ROOT=/root/autodl-tmp \
+TRAINER_LOGGER='["console","swanlab"]' \
+bash recipe/phase2/run_serial_bridge_then_compare_sample_k3_2gpu_931.sh
+```
+
+两个新入口使用不同实验目录且拒绝覆盖非空 checkpoint、rollout 或日志路径。这些是待运行
+实验配置；在完成固定 200 条评测前，不计入上文已有结果表。
 
 ### Sample-token k3 OPD
 

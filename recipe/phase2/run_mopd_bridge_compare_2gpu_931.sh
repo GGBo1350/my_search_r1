@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Two-GPU 931 profile for one epoch of bridge/compare OPD.
+# Two-GPU 931 profile for routed Bridge/Comparison Forward-KL Top-32 OPD.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,11 +12,16 @@ if (( available_gpus < 2 )); then
     exit 3
 fi
 
+export ARTIFACT_ROOT=${ARTIFACT_ROOT:-/root/autodl-tmp}
+export RUN_ID=${RUN_ID:-$(date +%Y%m%d_%H%M%S)}
+export TEACHER_PAIR_RUN_ID=${TEACHER_PAIR_RUN_ID:-20260813_113331}
 export PYTHON_BIN=${PYTHON_BIN:-/root/miniconda3/envs/verl/bin/python}
-export STUDENT_MODEL=${STUDENT_MODEL:-/root/autodl-tmp/models/Qwen--Qwen3-4B/snapshots/master}
-export TEACHER_BASE_MODEL=${TEACHER_BASE_MODEL:-${STUDENT_MODEL}}
-export BRIDGE_TEACHER_ADAPTER=${BRIDGE_TEACHER_ADAPTER:-/root/autodl-tmp/models/search_r1_teacher_adapters/bridge_s75/lora_adapter}
-export COMPARE_TEACHER_ADAPTER=${COMPARE_TEACHER_ADAPTER:-/root/autodl-tmp/models/search_r1_teacher_adapters/compare_s25/lora_adapter}
+export BASE_MODEL=${BASE_MODEL:-${ARTIFACT_ROOT}/models/Qwen--Qwen3-4B/snapshots/master}
+export STUDENT_MODEL=${STUDENT_MODEL:-${BASE_MODEL}}
+export TEACHER_BASE_MODEL=${TEACHER_BASE_MODEL:-${BASE_MODEL}}
+export TEACHER_EXPORT_ROOT=${TEACHER_EXPORT_ROOT:-${ARTIFACT_ROOT}/models/search_r1_teacher_adapters/full_lora_${TEACHER_PAIR_RUN_ID}}
+export BRIDGE_TEACHER_ADAPTER=${BRIDGE_TEACHER_ADAPTER:-${TEACHER_EXPORT_ROOT}/bridge_s75/lora_adapter}
+export COMPARE_TEACHER_ADAPTER=${COMPARE_TEACHER_ADAPTER:-${TEACHER_EXPORT_ROOT}/compare_s25/lora_adapter}
 export TRAIN_FILE=${TRAIN_FILE:-${REPO_ROOT}/data/hotpotqa_v3_hard_1600/train_opd_routed.parquet}
 export TEST_FILE=${TEST_FILE:-${REPO_ROOT}/data/hotpotqa_v3_hard_1600/validation_opd_routed.parquet}
 
@@ -46,6 +51,18 @@ export LORA_ALPHA=${LORA_ALPHA:-64}
 export LORA_TARGET_MODULES=${LORA_TARGET_MODULES:-'[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'}
 
 export DISTILLATION_TOPK=${DISTILLATION_TOPK:-32}
+export DISTILLATION_LOSS_MODE=${DISTILLATION_LOSS_MODE:-forward_kl_topk}
+export USE_TASK_REWARDS=${USE_TASK_REWARDS:-False}
+export DISTILLATION_PROFILE=${DISTILLATION_PROFILE:-forward_top32}
+case "${DISTILLATION_PROFILE}" in
+    forward_top32) expected_loss_mode=forward_kl_topk ;;
+    reverse_top32) expected_loss_mode=reverse_kl_topk ;;
+    *) echo "DISTILLATION_PROFILE must be forward_top32 or reverse_top32." >&2; exit 2 ;;
+esac
+if [[ "${DISTILLATION_LOSS_MODE}" != "${expected_loss_mode}" || "${DISTILLATION_TOPK}" != "32" || "${USE_TASK_REWARDS}" != "False" ]]; then
+    echo "Profile ${DISTILLATION_PROFILE} requires ${expected_loss_mode}/topk=32 with task rewards disabled." >&2
+    exit 2
+fi
 export MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-1024}
 export MAX_RESPONSE_LENGTH=${MAX_RESPONSE_LENGTH:-4096}
 export ROLLOUT_MAX_MODEL_LEN=${ROLLOUT_MAX_MODEL_LEN:-5121}
@@ -67,19 +84,58 @@ export AGENT_TOOL_GPU_DEVICES=${AGENT_TOOL_GPU_DEVICES:-'[0,1]'}
 export REWARD_NUM_WORKERS=${REWARD_NUM_WORKERS:-4}
 export RAY_NUM_CPUS=${RAY_NUM_CPUS:-8}
 export TOTAL_EPOCHS=${TOTAL_EPOCHS:-1}
-export TOTAL_TRAINING_STEPS=${TOTAL_TRAINING_STEPS:-null}
+export TOTAL_TRAINING_STEPS=${TOTAL_TRAINING_STEPS:-100}
 export SAVE_FREQ=${SAVE_FREQ:-100}
 export TEST_FREQ=${TEST_FREQ:--1}
 export VAL_BEFORE_TRAIN=${VAL_BEFORE_TRAIN:-False}
 export MAX_ACTOR_CKPT_TO_KEEP=${MAX_ACTOR_CKPT_TO_KEEP:-1}
-export RESUME_MODE=${RESUME_MODE:-disable}
+export RESUME_MODE=disable
 export ROLLOUT_DATA_ENABLED=${ROLLOUT_DATA_ENABLED:-True}
 export ROLLOUT_DATA_FREQ=${ROLLOUT_DATA_FREQ:-10}
 export TRAINER_LOGGER=${TRAINER_LOGGER:-'["console","swanlab"]'}
 export PROJECT_NAME=${PROJECT_NAME:-search_r1_hotpotqa_v3_mopd}
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_mopd_all7_lora_r32_2gpu_top32_p1024_epoch1_$(date +%Y%m%d_%H%M%S)}
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_mopd_forward_top32_all7_lora_r32_2gpu_${RUN_ID}}
+export CHECKPOINT_DIR=${CHECKPOINT_DIR:-${ARTIFACT_ROOT}/checkpoints/${EXPERIMENT_NAME}}
+export ROLLOUT_DATA_DIR=${ROLLOUT_DATA_DIR:-${ARTIFACT_ROOT}/rollouts/${EXPERIMENT_NAME}}
+export LOG_FILE=${LOG_FILE:-${ARTIFACT_ROOT}/train_logs/${EXPERIMENT_NAME}.launch.log}
+
+if [[ "${TRAIN_BATCH_SIZE}" != "16" || "${N_RESP_PER_PROMPT}" != "1" || \
+      "${LORA_RANK}" != "32" || "${LORA_ALPHA}" != "64" || \
+      "${TOTAL_EPOCHS}" != "1" || "${TOTAL_TRAINING_STEPS}" != "100" ]]; then
+    echo "This 931 comparison profile is fixed to batch=16, n=1, LoRA r32/a64, and 100 steps." >&2
+    exit 2
+fi
+
+for d in "${CHECKPOINT_DIR}" "${ROLLOUT_DATA_DIR}"; do
+    if [[ -d "${d}" ]] && find "${d}" -mindepth 1 -print -quit | grep -q .; then
+        echo "Refusing to reuse a non-empty experiment path: ${d}" >&2
+        exit 4
+    fi
+done
+if [[ -e "${LOG_FILE}" ]]; then
+    echo "Refusing to append to an existing experiment log: ${LOG_FILE}" >&2
+    exit 4
+fi
+
+mkdir -p "$(dirname "${LOG_FILE}")"
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
+ARTIFACT_ROOT="${ARTIFACT_ROOT}" \
+PYTHON_BIN="${PYTHON_BIN}" \
+BASE_MODEL="${TEACHER_BASE_MODEL}" \
+TEACHER_PAIR_RUN_ID="${TEACHER_PAIR_RUN_ID}" \
+TEACHER_EXPORT_ROOT="${TEACHER_EXPORT_ROOT}" \
+BRIDGE_TEACHER_ADAPTER="${BRIDGE_TEACHER_ADAPTER}" \
+COMPARE_TEACHER_ADAPTER="${COMPARE_TEACHER_ADAPTER}" \
+    bash "${SCRIPT_DIR}/prepare_full_lora_teacher_pair_931.sh"
 
 echo "Student LoRA rank/alpha: ${LORA_RANK}/${LORA_ALPHA}"
 echo "Student LoRA target modules: ${LORA_TARGET_MODULES}"
+echo "DISTILLATION_PROFILE=${DISTILLATION_PROFILE} DISTILLATION_LOSS_MODE=${DISTILLATION_LOSS_MODE} DISTILLATION_TOPK=${DISTILLATION_TOPK}"
+echo "USE_TASK_REWARDS=${USE_TASK_REWARDS} USE_POLICY_GRADIENT=False"
+echo "BRIDGE_TEACHER_ADAPTER=${BRIDGE_TEACHER_ADAPTER}"
+echo "COMPARE_TEACHER_ADAPTER=${COMPARE_TEACHER_ADAPTER}"
+echo "CHECKPOINT_DIR=${CHECKPOINT_DIR}"
+echo "LOG_FILE=${LOG_FILE}"
 
 exec bash "${SCRIPT_DIR}/run_mopd_bridge_compare.sh" "$@"
