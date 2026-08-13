@@ -252,6 +252,9 @@ Bridge teacher 训练 75 step，再仅继承 student 模型、优化器、LR sch
 Comparison 数据。两段均关闭 task reward 和 policy-gradient distillation，目标固定为
 sample-token `k=3`：
 
+Bridge 段保留 `global_step_25/50/75` 三个 checkpoint；Comparison 段只保存并保留最终的
+`global_step_100`。
+
 ```bash
 cd /root/autodl-tmp/my_search_r1_eval
 

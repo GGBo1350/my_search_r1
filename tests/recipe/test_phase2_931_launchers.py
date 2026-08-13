@@ -41,6 +41,9 @@ def test_serial_k3_launcher_runs_bridge_then_compare_with_state_only_handoff():
     assert '"${HANDOFF_STEP}/data.pt"' in script
     assert "TRAIN_BATCH_SIZE=16 TOTAL_EPOCHS=1 TOTAL_TRAINING_STEPS=100" in script
     assert "TRAIN_BATCH_SIZE=16 TOTAL_EPOCHS=4 TOTAL_TRAINING_STEPS=100" in script
+    assert "SAVE_FREQ=25 MAX_ACTOR_CKPT_TO_KEEP=3" in script
+    assert "for step in 25 50 75" in script
+    assert "SAVE_FREQ=100 MAX_ACTOR_CKPT_TO_KEEP=1" in script
     assert script.count('STUDENT_MODEL="${BASE_MODEL}"') == 2
     assert '"${COMPARE_CHECKPOINT_DIR}/global_step_100/actor"' in script
 

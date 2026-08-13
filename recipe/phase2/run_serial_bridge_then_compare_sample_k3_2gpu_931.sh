@@ -96,14 +96,16 @@ PYTHON_BIN="${PYTHON_BIN}" \
 BASE_MODEL="${BASE_MODEL}" \
 STUDENT_MODEL="${BASE_MODEL}" \
 TRAIN_BATCH_SIZE=16 TOTAL_EPOCHS=1 TOTAL_TRAINING_STEPS=100 \
-SAVE_FREQ=25 MAX_ACTOR_CKPT_TO_KEEP=1 \
+SAVE_FREQ=25 MAX_ACTOR_CKPT_TO_KEEP=3 \
     bash "${SCRIPT_DIR}/run_single_teacher_sample_k3_2gpu_931.sh" "$@"
 
 BRIDGE_STEP="${BRIDGE_CHECKPOINT_DIR}/global_step_75"
-if [[ ! -d "${BRIDGE_STEP}/actor" ]]; then
-    echo "Bridge stage did not produce the required checkpoint: ${BRIDGE_STEP}/actor" >&2
-    exit 5
-fi
+for step in 25 50 75; do
+    if [[ ! -d "${BRIDGE_CHECKPOINT_DIR}/global_step_${step}/actor" ]]; then
+        echo "Bridge stage did not retain global_step_${step}." >&2
+        exit 5
+    fi
+done
 
 # Resume model/optimizer/LR-scheduler/RNG state only. The deliberately absent
 # data.pt prevents the Bridge dataloader cursor from entering Comparison.
@@ -133,7 +135,7 @@ PYTHON_BIN="${PYTHON_BIN}" \
 BASE_MODEL="${BASE_MODEL}" \
 STUDENT_MODEL="${BASE_MODEL}" \
 TRAIN_BATCH_SIZE=16 TOTAL_EPOCHS=4 TOTAL_TRAINING_STEPS=100 \
-SAVE_FREQ=25 MAX_ACTOR_CKPT_TO_KEEP=1 \
+SAVE_FREQ=100 MAX_ACTOR_CKPT_TO_KEEP=1 \
     bash "${SCRIPT_DIR}/run_single_teacher_sample_k3_2gpu_931.sh" "$@"
 
 if [[ ! -d "${COMPARE_CHECKPOINT_DIR}/global_step_100/actor" ]]; then
@@ -142,6 +144,6 @@ if [[ ! -d "${COMPARE_CHECKPOINT_DIR}/global_step_100/actor" ]]; then
 fi
 
 echo "SERIAL_SAMPLE_K3_DONE at $(date)"
-echo "BRIDGE_CHECKPOINT=${BRIDGE_CHECKPOINT_DIR}/global_step_75"
+echo "BRIDGE_CHECKPOINTS=${BRIDGE_CHECKPOINT_DIR}/global_step_{25,50,75}"
 echo "FINAL_CHECKPOINT=${COMPARE_CHECKPOINT_DIR}/global_step_100"
 echo "MASTER_LOG=${MASTER_LOG}"
