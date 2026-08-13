@@ -338,4 +338,4 @@ GPU 端到端训练仍需按实际 CUDA、SGLang、FlashInfer 和显存条件验
 - [Qwen3](https://github.com/QwenLM/Qwen3)
 - [HotpotQA](https://hotpotqa.github.io/)
 
-仓库沿用 veRL 的 Apache License 2.0，详见 [`LICENSE`](LICENSE) 与 [`Notice.txt`](Notice.txt)。仓库页面组织参考了 [shopping-grpo-longhorizon](https://github.com/YYHDBL/shopping-grpo-longhorizon) 的可复现项目呈现方式。
+仓库沿用 veRL 的 Apache License 2.0，详见 [`LICENSE`](LICENSE) 与 [`Notice.txt`](Notice.txt)。
