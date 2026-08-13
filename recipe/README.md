@@ -76,6 +76,8 @@ Phase 2 从另一份 Base student 出发，用 student 自身 on-policy 轨迹�
 2. Phase 1 `global_step_100` 单 teacher，使用 sample-token `k=3` OPD；student 与 teacher adapter 都覆盖 `q/k/v/o_proj` 和 `gate/up/down_proj`。
 3. 双 teacher Reverse Top-k：在 teacher Top-k token 与一个剩余词表 `other` 桶组成的共享支持集上，直接优化 `KL(student || teacher)`。
 
+当前全 7 投影专项 teacher 的固定集路由内结果：Bridge s75 为 Exact `0.540` / Strategy `0.810`，Comparison s25 为 Exact `0.700` / Strategy `0.980`。默认仍按 `bridge→s75`、`compare→s25` 路由；已完成的旧 OPD student 结果不因 teacher 基准更新而改变。
+
 主要入口：
 
 - `phase2/add_teacher_route.py`：为旧 Parquet 非覆盖式增加 `teacher_route`。

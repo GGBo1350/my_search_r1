@@ -38,12 +38,21 @@ flowchart LR
 
 OPD 内部实现了两种配置：
 
-1. Bridge s75 / Compare s25 双 teacher，按题型路由，top-32 forward KL；
+1. 全 7 投影 LoRA 的 Bridge s75 / Compare s25 双 teacher，按题型路由，top-32 forward KL；
 2. GRPO s100 单 teacher，sample-token k3，全 7 投影 LoRA。
 
 ## 实验结果
 
 固定评测集为 200 条 HotpotQA distractor hard，包含 100 Bridge + 100 Comparison。所有结果使用 greedy 单次 rollout；Exact/F1 从预测与 gold 按统一 HotpotQA 归一化严格重算，不用 LLM judge 替代主指标。
+
+当前专项 teacher 的路由内能力如下；两位 teacher 均从 Qwen3-4B Base 独立训练，并仅作为 OPD 的 token 分布评分源：
+
+| Teacher | 路由题型 | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Bridge s75 | Bridge | **0.540** | 0.700 | 0.663 | 0.810 | 0.810 | 0.920 |
+| Compare s25 | Comparison | **0.700** | 0.860 | 0.825 | **0.980** | 0.935 | **0.990** |
+
+Bridge s75 负责先读取第一跳工具结果、再生成第二跳查询的 `[1,1]` 串行轨迹；Compare s25 负责同一轮生成两个独立查询的 `[2]` 并行轨迹。已完成的 Dual-teacher OPD s100 是一次独立历史训练，其 student 指标保持原始记录；若使用当前 teacher 权重训练，需要作为新实验另行评测。
 
 | 模型 | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format | Calls |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

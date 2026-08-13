@@ -2,6 +2,53 @@
 
 > 按时间倒序记录各阶段实验：配置、结果、结论。配套总览见 [README.md](README.md)。
 
+## 2026-08-13 ｜ 全 7 投影 LoRA 专项 Teacher 定稿
+
+**统一口径**：Bridge 与 Comparison 专项 teacher 均从同一个 Qwen3-4B Base 独立初始化，LoRA 覆盖 `q/k/v/o_proj` 与 `gate/up/down_proj`，rank 32、alpha 64。固定 200 条验证集（100 Bridge + 100 Comparison），greedy 单次 rollout，关闭 LLM judge，并离线严格复算 Exact/F1、Strategy、Recall、Format 与工具调用数。
+
+**Bridge teacher checkpoint 扫描**
+
+| checkpoint | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format | Calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| s25 | 0.590 | 0.735 | 0.709 | 0.475 | 0.858 | 0.945 | 1.98 |
+| s50 | 0.575 | 0.750 | 0.711 | 0.545 | **0.885** | **0.960** | 2.04 |
+| **s75** | **0.625** | **0.780** | **0.745** | 0.440 | 0.877 | 0.955 | 2.06 |
+
+| checkpoint | 题型 | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format | Calls |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| s25 | Bridge | 0.500 | 0.650 | 0.626 | 0.730 | 0.775 | 0.940 | 2.00 |
+| s50 | Bridge | 0.490 | 0.670 | 0.639 | **0.850** | **0.820** | **0.950** | 2.08 |
+| **s75** | Bridge | **0.540** | **0.700** | **0.663** | 0.810 | 0.810 | 0.920 | 2.14 |
+| s25 | Comparison | 0.680 | 0.820 | 0.792 | 0.220 | 0.940 | 0.950 | 1.96 |
+| s50 | Comparison | 0.660 | 0.830 | 0.783 | 0.240 | **0.950** | 0.970 | 1.99 |
+| **s75** | Comparison | **0.710** | **0.860** | **0.827** | 0.070 | 0.945 | **0.990** | 1.98 |
+
+Bridge 路由选择 `global_step_75`：它在目标题型上取得最高 Exact、F1≥0.5 与 Mean F1，同时保持 0.810 的串行策略正确率。`global_step_50` 的串行策略与召回更高，可作为强调纯策略轨迹时的备选，但不是当前默认 teacher。
+
+**Comparison teacher `global_step_25`**
+
+| 题型 | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format | Calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Overall | 0.565 | 0.730 | 0.696 | 0.790 | 0.830 | 0.955 | 1.99 |
+| Bridge | 0.430 | 0.600 | 0.568 | 0.600 | 0.725 | 0.920 | 1.96 |
+| **Comparison** | **0.700** | **0.860** | **0.825** | **0.980** | **0.935** | **0.990** | 2.02 |
+
+**当前 Teacher 能力矩阵**
+
+| 模型 | Bridge Exact | Bridge Strategy | Compare Exact | Compare Strategy |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3-4B Base | 0.440 | 0.630 | 0.680 | 0.180 |
+| GRPO s100 | 0.510 | **0.870** | 0.670 | 0.960 |
+| **Bridge teacher s75** | **0.540** | 0.810 | **0.710** | 0.070 |
+| **Compare teacher s25** | 0.430 | 0.600 | 0.700 | **0.980** |
+
+**结论**
+
+1. 后续双 teacher OPD 固定使用 Bridge `global_step_75` 与 Comparison `global_step_25`，两者都为全 7 投影 LoRA。
+2. Bridge teacher 提供读取第一跳真实结果后再生成第二跳查询的 `[1,1]` 轨迹；Comparison teacher 提供同一轮生成两个独立查询的 `[2]` 轨迹。
+3. 两位 teacher 按样本顶层 `teacher_route=bridge|compare` 路由，不能跨题型混用。
+4. 已完成的双 teacher OPD s100 是此前独立运行的历史结果；更新 teacher 基准不会追溯改变该 student 的训练权重或评测结果，使用当前 teacher 的 OPD student 需要重新训练后单独记录。
+
 ## 2026-08-11 ｜ 全 7 投影 LoRA GRPO 与 sample-token OPD 最终对照
 
 **统一口径**：固定 200 条验证（100 Bridge + 100 Comparison），greedy 单次 rollout，严格 HotpotQA 归一化答案指标；同时复算 Strategy、Recall、Format 与工具调用数。两条路线都从 Qwen3-4B Base 出发，OPD student 不继承 GRPO 权重。
@@ -70,82 +117,6 @@
 
 **存储清理（用户确认）**：已删除 smoke `qwen3_4b_mopd_smoke_20260810_1616/global_step_1` 和非最优 compare teacher `global_step_20`，合计约 17 GB；compare 最优 `global_step_25` 保留且复核完整。
 
-## 2026-08-10 ｜ Teacher-Compare checkpoint 选择与双 Teacher 能力矩阵
-
-**背景**：用 400 条 compare 数据训练 compare 专精 teacher（1 epoch = 25 步），并对 s20/s25/s30/s35 做固定 200 条 greedy 严格评测。结合此前的 bridge teacher 结果，为后续按题型路由的多 teacher OPD 选择信号源。
-
-**Teacher-Compare 整体表现（greedy，严格匹配，200 条验证）**
-
-| checkpoint | strict exact@1 | F1≥0.5 | meanF1 |
-| --- | ---: | ---: | ---: |
-| s20 | 0.545 | 0.700 | 0.667 |
-| s25（1 epoch 末） | **0.560** | **0.720** | **0.680** |
-| s30 | 0.555 | 0.700 | 0.668 |
-| s35 | 0.555 | 0.715 | 0.679 |
-
-**最终能力矩阵（greedy，严格口径）**
-
-| 模型 | bridge exact | bridge 策略 | compare exact | compare 策略 |
-| --- | ---: | ---: | ---: | ---: |
-| base | 0.440 | 0.630 | 0.680 | 0.180 |
-| Phase 1 通用 50step | **0.500** | 0.760 | 0.680 | 0.930 |
-| teacher_bridge s75 | 0.480 | **0.790** | **0.710** | 0.260 |
-| teacher_compare s25 | 0.420 | 0.530 | 0.700 | **0.990** |
-
-**Checkpoint 选择**
-
-- Bridge teacher：`global_step_75`。
-- Compare teacher：`global_step_25`；其整体 strict exact、F1≥0.5 和 meanF1 均为本轮峰值。
-
-**结论**
-
-1. 两位 teacher 的主要价值是提供干净且互补的策略轨迹，而不是分别在答案准确率上全面超过通用模型。
-2. `teacher_bridge s75` 负责 bridge 串行轨迹：先检索第一跳，再根据真实返回结果检索第二跳。
-3. `teacher_compare s25` 负责 compare 单轮并行轨迹：同一轮输出多个 search 查询；compare 策略遵循率达到 0.990。
-4. 后续 OPD 应按题型路由 teacher，不能混用两个专精模型。路由字段需位于样本顶层，计划使用 `teacher_route=bridge|compare`。
-
-
-
-## 2026-08-09 ｜ Teacher-Bridge 训练与 checkpoint 评测（OPD 阶段）
-
-**背景**：OPD 第一阶段——用 1200 条 bridge 数据训练 bridge 专精 teacher（1 epoch = 75 步，SAVE_FREQ=20），评测 20/40/60/75 四个 checkpoint，为 OPD 蒸馏选信号源。
-
-> 注：本次 4 个 checkpoint 仅跑了 greedy 评测（200 条验证）；采样 pass@5 未跑，后续如需可对最优 checkpoint 补跑。
-
-**配置**：bs16×n8、mini 4、max_response 4096、完整奖励（my_reward.py + LLM 判定）、通用 prompt（专精只来自数据分布）；数据 `train_bridge_1200.parquet`。
-
-**整体表现（greedy，严格匹配，200 条验证）**
-
-| checkpoint | strict exact@1 | F1≥0.5 | meanF1 |
-| --- | ---: | ---: | ---: |
-| s20 | 0.550 | 0.705 | 0.675 |
-| s40 | 0.570 | 0.730 | 0.697 |
-| s60 | 0.575 | 0.735 | 0.700 |
-| s75（1 epoch 末） | 0.595 | 0.755 | 0.721 |
-
-**按题型拆解（greedy，严格口径）**
-
-| checkpoint | bridge exact | bridge 策略遵循 | compare exact | compare 策略遵循 | 平均调用数 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| s20 | 0.430 | 0.710 | 0.670 | 0.190 | 1.90 |
-| s40 | 0.440 | 0.670 | 0.700 | 0.170 | 1.91 |
-| s60 | 0.450 | 0.690 | 0.700 | 0.250 | 1.95 |
-| s75 | 0.480 | 0.790 | 0.710 | 0.260 | 1.97 |
-
-**与 base / Phase 1 通用 50step 对比（greedy，严格口径）**
-
-| 模型 | exact@1 | F1≥0.5 | bridge exact | bridge 策略 | compare exact | compare 策略 | 平均调用 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| base | 0.560 | 0.725 | 0.440 | 0.630 | 0.680 | 0.180 | 1.88 |
-| 50step（通用） | 0.590 | 0.740 | 0.500 | 0.760 | 0.680 | 0.930 | 2.04 |
-| teacher_bridge s75 | 0.595 | 0.755 | 0.480 | 0.790 | 0.710 | 0.260 | 1.97 |
-
-**结论（greedy）**
-
-1. 随步数单调提升，s75（1 epoch 末）最优：整体 exact 0.595、F1≥0.5 0.755、meanF1 0.721，略超通用 50step。
-2. bridge 专精生效：bridge 策略遵循 0.790（三者最高），bridge exact 0.480 仍低于 50step 的 0.500（数据少 + 只训 1 epoch）。
-3. teacher 不做并行（compare 策略 0.260），但 compare exact 0.710 反而最高——再次验证 compare 答对不依赖并行策略。
-4. OPD 用途：s75 是理想的 bridge 信号源——bridge 策略最干净、compare 无"伪并行"干扰。
 ## 2026-08-09 ｜ Ablation：纯 exact 答案奖励 + 无策略 prompt（50 步）
 
 **背景**：验证"去掉策略引导和策略/检索奖励、只用严格答案奖励"的效果（907 机对照实验）。

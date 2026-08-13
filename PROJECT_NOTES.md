@@ -35,12 +35,14 @@ q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj
 
 OPD student 从独立的 Qwen3-4B Base 初始化，在自身 on-policy 搜索轨迹上学习 teacher token 分布。已实现：
 
-- Bridge s75 + Comparison s25 双静态 LoRA teacher，按 `teacher_route` 路由，Top-k forward KL。
+- 全 7 投影 LoRA 的 Bridge s75 + Comparison s25 双静态 teacher，按 `teacher_route` 路由，Top-k forward KL。
 - Phase 1 s100 单静态 teacher，sample-token `k=3` 蒸馏。
 - teacher 与 student adapter 的模块、rank、文件完整性在训练前 fail-closed 校验。
 - 训练时记录 teacher probability mass、token overlap、蒸馏 loss 与工具执行指标到 SwanLab。
 
 双 teacher OPD s100 的固定集结果为 Exact 0.545 / Strategy 0.855；sample-token OPD s25 为 0.585 / 0.780，s100 为 0.580 / 0.865。当前最佳综合结果仍来自 Phase 1 GRPO s100，OPD 则验证了不依赖任务 reward 的独立策略学习路径。
+
+当前专项 teacher 在固定 200 条 greedy 评测中的路由内结果为：Bridge s75 的 Bridge Exact/Strategy `0.540/0.810`，Comparison s25 的 Comparison Exact/Strategy `0.700/0.980`。两者都从 Qwen3-4B Base 独立训练，LoRA 覆盖 `q/k/v/o_proj` 与 `gate/up/down_proj`。已完成的双 teacher OPD s100 属于此前独立运行，不能把更新后的 teacher 指标追溯解释为该 student 的训练配置。
 
 ## veRL 关键扩展
 
