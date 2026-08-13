@@ -17,7 +17,9 @@ export TOOL_CONFIG_PATH=recipe/core/tool_config_hybrid.yaml
 export TRAIN_BATCH_SIZE=16
 export N_RESP_PER_PROMPT=8
 export PPO_MINI_BATCH_SIZE=4
-export LORA_TARGET_MODULES="[qkv_proj,o_proj,gate_up_proj,down_proj]"
+export LORA_RANK=32
+export LORA_ALPHA=64
+export LORA_TARGET_MODULES='[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'
 export AGENT_NUM_WORKERS=2
 export REWARD_NUM_WORKERS=2
 export TOTAL_TRAINING_STEPS=200
@@ -26,7 +28,7 @@ export ROLLOUT_DATA_FREQ=10
 # 保留最近 4 个 checkpoint（50/100/150/200），旧的不会被删
 export MAX_ACTOR_CKPT_TO_KEEP=4
 export RESUME_MODE=resume
-export CHECKPOINT_DIR=/root/autodl-tmp/checkpoints/qwen3_4b_sglang_16x8_100step_907_20260807_145020
+export CHECKPOINT_DIR=${CHECKPOINT_DIR:?provide a full seven-projection LoRA checkpoint root containing global_step_100}
 export ROLLOUT_DATA_DIR=/root/autodl-tmp/rollouts/qwen3_4b_sglang_16x8_100to200_907_${RUN_ID}
 export EXPERIMENT_NAME=qwen3_4b_sglang_16x8_100to200_907_${RUN_ID}
 echo "launching run ${RUN_ID} (resume 100->200) at $(date)"

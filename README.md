@@ -156,6 +156,8 @@ python recipe/data/build_hybrid_index.py \
 
 实验环境：Linux、Python 3.12、CUDA 12.8、PyTorch 2.9.1、SGLang 0.5.8、FlashAttention 2.8.3、FlashInfer、Ray 2.56.1、PEFT 0.18.0。主实验使用 Qwen3-4B，全 7 投影 LoRA：
 
+仓库内 `recipe/` 的 Qwen3 LoRA 训练、蒸馏和评测入口均已统一到这组全 7 投影；公共启动器会拒绝较窄的 target 配置，避免误加载历史部分投影 adapter。
+
 ```text
 q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj
 rank=32, alpha=64

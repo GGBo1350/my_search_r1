@@ -28,7 +28,12 @@ TEACHER_NNODES=${TEACHER_NNODES:-1}
 TEACHER_TP=${TEACHER_TP:-1}
 TEACHER_NUM_REPLICAS=${TEACHER_NUM_REPLICAS:-1}
 TEACHER_LORA_RANK=${TEACHER_LORA_RANK:-32}
-TEACHER_LORA_TARGET_MODULES=${TEACHER_LORA_TARGET_MODULES:-"[o_proj,down_proj]"}
+FULL_LORA_TARGETS='[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'
+TEACHER_LORA_TARGET_MODULES=${TEACHER_LORA_TARGET_MODULES:-${FULL_LORA_TARGETS}}
+if [[ "${TEACHER_LORA_TARGET_MODULES}" != "${FULL_LORA_TARGETS}" ]]; then
+    echo "Teachers must use all seven Qwen3 LoRA projections: ${FULL_LORA_TARGETS}" >&2
+    exit 2
+fi
 DISTILLATION_TOPK=${DISTILLATION_TOPK:-16}
 DISTILLATION_LOSS_MODE=${DISTILLATION_LOSS_MODE:-forward_kl_topk}
 USE_TASK_REWARDS=${USE_TASK_REWARDS:-False}
@@ -82,7 +87,11 @@ export ROLLOUT_ATTENTION_BACKEND=${ROLLOUT_ATTENTION_BACKEND:-flashinfer}
 # PEFT builds the actor from the Hugging Face Qwen3 module tree, whose
 # projections are not fused.  SGLang accepts these names and maps q/k/v and
 # gate/up to its packed qkv_proj and gate_up_proj rollout modules.
-export LORA_TARGET_MODULES=${LORA_TARGET_MODULES:-"[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]"}
+export LORA_TARGET_MODULES=${LORA_TARGET_MODULES:-${FULL_LORA_TARGETS}}
+if [[ "${LORA_TARGET_MODULES}" != "${FULL_LORA_TARGETS}" ]]; then
+    echo "Student must use all seven Qwen3 LoRA projections: ${FULL_LORA_TARGETS}" >&2
+    exit 2
+fi
 export ROLLOUT_GPU_MEM_UTIL=${ROLLOUT_GPU_MEM_UTIL:-0.20}
 export ROLLOUT_MAX_NUM_SEQS=${ROLLOUT_MAX_NUM_SEQS:-4}
 export ROLLOUT_ENABLE_SLEEP_MODE=${ROLLOUT_ENABLE_SLEEP_MODE:-True}

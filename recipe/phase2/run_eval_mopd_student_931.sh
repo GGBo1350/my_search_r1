@@ -6,7 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
-export STUDENT_EXPORT=${STUDENT_EXPORT:-/root/autodl-tmp/models/search_r1_student_adapters/mopd_top32_p1024_s100}
+STUDENT_EXPORT=${STUDENT_EXPORT:?provide an exported full seven-projection OPD student directory}
+export STUDENT_EXPORT
 export LORA_ADAPTER_PATH=${LORA_ADAPTER_PATH:-${STUDENT_EXPORT}/lora_adapter}
 export VALIDATION_EXPERIMENT_NAME=${VALIDATION_EXPERIMENT_NAME:-qwen3_4b_mopd_top32_p1024_s100_fixed200_greedy}
 export VALIDATION_LOG=${VALIDATION_LOG:-/root/autodl-tmp/logs/${VALIDATION_EXPERIMENT_NAME}.log}
@@ -30,9 +31,11 @@ export AGENT_TOOL_GPU_DEVICES=${AGENT_TOOL_GPU_DEVICES:-'[0]'}
 export N_RESP_PER_PROMPT=1
 export LORA_RANK=32
 export LORA_ALPHA=64
-# Match the modules actually present in the exported adapter. The completed
-# training run only matched the HF model's o_proj and down_proj layers.
-export LORA_TARGET_MODULES=${LORA_TARGET_MODULES:-'[o_proj,down_proj]'}
+export LORA_TARGET_MODULES='[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'
+"${PYTHON_BIN}" recipe/phase2/verify_teacher_adapters.py \
+    --rank "${LORA_RANK}" \
+    --target-modules "${LORA_TARGET_MODULES}" \
+    "${LORA_ADAPTER_PATH}"
 export MAX_PROMPT_LENGTH=1024
 export MAX_RESPONSE_LENGTH=4096
 export MAX_TOOL_RESPONSE_LENGTH=1024

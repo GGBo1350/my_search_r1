@@ -19,7 +19,13 @@ if ! [[ "${LORA_ALPHA}" =~ ^[1-9][0-9]*$ ]]; then
     echo "LORA_ALPHA 必须是正整数，当前值：${LORA_ALPHA}" >&2
     exit 2
 fi
-LORA_TARGET_MODULES=${LORA_TARGET_MODULES:-all-linear}
+FULL_LORA_TARGETS='[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'
+LORA_TARGET_MODULES=${LORA_TARGET_MODULES:-${FULL_LORA_TARGETS}}
+if [[ "${LORA_TARGET_MODULES}" != "${FULL_LORA_TARGETS}" ]]; then
+    echo "Search-R1 requires all seven Qwen3 LoRA projections: ${FULL_LORA_TARGETS}" >&2
+    echo "Got LORA_TARGET_MODULES=${LORA_TARGET_MODULES}" >&2
+    exit 2
+fi
 # 当前单卡 FSDP + vLLM 路径使用非分层收集，避免 rollout 侧 LoRA
 # 参数不完整时静默产生异常输出。
 LORA_LAYERED_SUMMON=${LORA_LAYERED_SUMMON:-False}

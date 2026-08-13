@@ -2,6 +2,8 @@
 
 `recipe/` 保存本项目相对 veRL 上游新增的完整实验链路。Phase 1 与 Phase 2 是从同一 Qwen3-4B Base 出发的两条对照路线，而不是先后继承权重的连续训练阶段。
 
+所有 Qwen3-4B LoRA 训练、蒸馏和评测入口统一使用 rank 32、alpha 64 的全 7 投影配置：`q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj`。公共启动器会拒绝更窄的 target 列表；历史两投影 checkpoint 不能通过这些入口续训或评测。
+
 ## 目录
 
 - `core/`：搜索工具、工具调用解析器、混合奖励与工具配置。

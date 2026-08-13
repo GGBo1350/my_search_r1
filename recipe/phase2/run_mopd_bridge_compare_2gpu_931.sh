@@ -40,8 +40,7 @@ export REF_LOG_PROB_MICRO_BATCH_SIZE_PER_GPU=${REF_LOG_PROB_MICRO_BATCH_SIZE_PER
 export ACTOR_USE_KL_LOSS=${ACTOR_USE_KL_LOSS:-False}
 
 # Apply student LoRA to every attention and MLP projection in every Qwen3
-# transformer block.  Keep rank/alpha unchanged from the o_proj+down_proj run
-# so this experiment isolates the effect of expanding module coverage.
+# transformer block. The shared launcher rejects any narrower target list.
 export LORA_RANK=${LORA_RANK:-32}
 export LORA_ALPHA=${LORA_ALPHA:-64}
 export LORA_TARGET_MODULES=${LORA_TARGET_MODULES:-'[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'}
