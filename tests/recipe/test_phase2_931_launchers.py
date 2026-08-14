@@ -9,14 +9,16 @@ def _script(name: str) -> str:
     return (_PHASE2 / name).read_text(encoding="utf-8")
 
 
-def test_931_mopd_launcher_is_fixed_to_forward_top16_and_full_lora():
+def test_931_mopd_launcher_is_fixed_to_sample_token_k3_and_full_lora():
     script = _script("run_mopd_bridge_compare_2gpu_931.sh")
 
-    assert "DISTILLATION_LOSS_MODE=${DISTILLATION_LOSS_MODE:-forward_kl_topk}" in script
-    assert "DISTILLATION_TOPK=${DISTILLATION_TOPK:-16}" in script
-    assert "DISTILLATION_PROFILE=${DISTILLATION_PROFILE:-forward_top16}" in script
-    assert "forward_top16) expected_loss_mode=forward_kl_topk; expected_topk=16" in script
+    assert "DISTILLATION_LOSS_MODE=${DISTILLATION_LOSS_MODE:-k3}" in script
+    assert "DISTILLATION_TOPK=${DISTILLATION_TOPK:-null}" in script
+    assert "DISTILLATION_PROFILE=${DISTILLATION_PROFILE:-sample_k3}" in script
+    assert "sample_k3) expected_loss_mode=k3; expected_topk=null" in script
     assert "reverse_top32) expected_loss_mode=reverse_kl_topk; expected_topk=32" in script
+    assert "distillation.distillation_loss.loss_max_clamp=10.0" in script
+    assert "distillation.distillation_loss.log_prob_min_clamp=-10.0" in script
     assert "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" in script
     assert "prepare_full_lora_teacher_pair_931.sh" in script
     assert "TOTAL_TRAINING_STEPS=${TOTAL_TRAINING_STEPS:-100}" in script

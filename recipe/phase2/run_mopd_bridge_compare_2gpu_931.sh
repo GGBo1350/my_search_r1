@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Two-GPU 931 profile for routed Bridge/Comparison Forward-KL Top-16 OPD.
+# Two-GPU 931 profile for routed Bridge/Comparison sample-token K3 OPD.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -50,14 +50,14 @@ export LORA_RANK=${LORA_RANK:-32}
 export LORA_ALPHA=${LORA_ALPHA:-64}
 export LORA_TARGET_MODULES=${LORA_TARGET_MODULES:-'[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'}
 
-export DISTILLATION_TOPK=${DISTILLATION_TOPK:-16}
-export DISTILLATION_LOSS_MODE=${DISTILLATION_LOSS_MODE:-forward_kl_topk}
+export DISTILLATION_TOPK=${DISTILLATION_TOPK:-null}
+export DISTILLATION_LOSS_MODE=${DISTILLATION_LOSS_MODE:-k3}
 export USE_TASK_REWARDS=${USE_TASK_REWARDS:-False}
-export DISTILLATION_PROFILE=${DISTILLATION_PROFILE:-forward_top16}
+export DISTILLATION_PROFILE=${DISTILLATION_PROFILE:-sample_k3}
 case "${DISTILLATION_PROFILE}" in
-    forward_top16) expected_loss_mode=forward_kl_topk; expected_topk=16 ;;
+    sample_k3) expected_loss_mode=k3; expected_topk=null ;;
     reverse_top32) expected_loss_mode=reverse_kl_topk; expected_topk=32 ;;
-    *) echo "DISTILLATION_PROFILE must be forward_top16 or reverse_top32." >&2; exit 2 ;;
+    *) echo "DISTILLATION_PROFILE must be sample_k3 or reverse_top32." >&2; exit 2 ;;
 esac
 if [[ "${DISTILLATION_LOSS_MODE}" != "${expected_loss_mode}" || "${DISTILLATION_TOPK}" != "${expected_topk}" || "${USE_TASK_REWARDS}" != "False" ]]; then
     echo "Profile ${DISTILLATION_PROFILE} requires ${expected_loss_mode}/topk=${expected_topk} with task rewards disabled." >&2
@@ -94,7 +94,7 @@ export ROLLOUT_DATA_ENABLED=${ROLLOUT_DATA_ENABLED:-True}
 export ROLLOUT_DATA_FREQ=${ROLLOUT_DATA_FREQ:-10}
 export TRAINER_LOGGER=${TRAINER_LOGGER:-'["console","swanlab"]'}
 export PROJECT_NAME=${PROJECT_NAME:-search_r1_hotpotqa_v3_mopd}
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_mopd_forward_top16_all7_lora_r32_2gpu_${RUN_ID}}
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_mopd_sample_token_k3_all7_lora_r32_2gpu_${RUN_ID}}
 export CHECKPOINT_DIR=${CHECKPOINT_DIR:-${ARTIFACT_ROOT}/checkpoints/${EXPERIMENT_NAME}}
 export ROLLOUT_DATA_DIR=${ROLLOUT_DATA_DIR:-${ARTIFACT_ROOT}/rollouts/${EXPERIMENT_NAME}}
 export LOG_FILE=${LOG_FILE:-${ARTIFACT_ROOT}/train_logs/${EXPERIMENT_NAME}.launch.log}
@@ -146,6 +146,9 @@ COMPARE_TEACHER_ADAPTER="${COMPARE_TEACHER_ADAPTER}" \
 echo "Student LoRA rank/alpha: ${LORA_RANK}/${LORA_ALPHA}"
 echo "Student LoRA target modules: ${LORA_TARGET_MODULES}"
 echo "DISTILLATION_PROFILE=${DISTILLATION_PROFILE} DISTILLATION_LOSS_MODE=${DISTILLATION_LOSS_MODE} DISTILLATION_TOPK=${DISTILLATION_TOPK}"
+if [[ "${DISTILLATION_PROFILE}" == "sample_k3" ]]; then
+    echo "DISTILLATION_SIGNAL=sample_token LOSS_MAX_CLAMP=10.0 LOG_PROB_MIN_CLAMP=-10.0"
+fi
 echo "USE_TASK_REWARDS=${USE_TASK_REWARDS} USE_POLICY_GRADIENT=False"
 echo "BRIDGE_TEACHER_ADAPTER=${BRIDGE_TEACHER_ADAPTER}"
 echo "COMPARE_TEACHER_ADAPTER=${COMPARE_TEACHER_ADAPTER}"
@@ -153,5 +156,12 @@ echo "CHECKPOINT_STEPS=25,50,75,100 MAX_ACTOR_CKPT_TO_KEEP=${MAX_ACTOR_CKPT_TO_K
 echo "MIN_FREE_DISK_GB=${MIN_FREE_DISK_GB}"
 echo "CHECKPOINT_DIR=${CHECKPOINT_DIR}"
 echo "LOG_FILE=${LOG_FILE}"
+
+if [[ "${DISTILLATION_PROFILE}" == "sample_k3" ]]; then
+    exec bash "${SCRIPT_DIR}/run_mopd_bridge_compare.sh" \
+        distillation.distillation_loss.loss_max_clamp=10.0 \
+        distillation.distillation_loss.log_prob_min_clamp=-10.0 \
+        "$@"
+fi
 
 exec bash "${SCRIPT_DIR}/run_mopd_bridge_compare.sh" "$@"

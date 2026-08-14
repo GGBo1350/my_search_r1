@@ -4,7 +4,7 @@
 
 ## 2026-08-14 ｜ 双 Teacher Forward-KL Top-32 OOM
 
-运行 `20260814_123655` 使用双卡路由、全 7 投影 LoRA student、Bridge s75 / Comparison s25 teacher、`forward_kl_topk/topk=32`。训练在 actor backward 阶段因 CUDA OOM 终止：GPU 0 当时仅余约 268 MiB，反向传播仍需申请 1.46 GiB，因此未产出可用 checkpoint。为保持其余变量不变并单独检验蒸馏支持集大小的影响，931 默认入口随后改为 Forward-KL Top-16；若仍 OOM，再单独调整 PPO mini batch，而不把两项改动混在同一次对照中。
+运行 `20260814_123655` 使用双卡路由、全 7 投影 LoRA student、Bridge s75 / Comparison s25 teacher、`forward_kl_topk/topk=32`。训练在 actor backward 阶段因 CUDA OOM 终止：GPU 0 当时仅余约 268 MiB，反向传播仍需申请 1.46 GiB，因此未产出可用 checkpoint。后续默认入口改为 sample-token `k=3`（`loss_mode=k3`、`topk=null`），仅请求 student 实际采样 token 的 teacher log-prob，继续保持 teacher 路由、数据、student 初始化和保存策略不变。
 
 ## 2026-08-14 ｜ Bridge→Comparison 串行 Sample-K3 OPD
 
