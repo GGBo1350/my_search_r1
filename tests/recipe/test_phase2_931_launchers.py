@@ -18,8 +18,16 @@ def test_931_mopd_launcher_is_fixed_to_forward_top32_and_full_lora():
     assert "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" in script
     assert "prepare_full_lora_teacher_pair_931.sh" in script
     assert "TOTAL_TRAINING_STEPS=${TOTAL_TRAINING_STEPS:-100}" in script
+    assert "SAVE_FREQ=${SAVE_FREQ:-25}" in script
+    assert "MAX_ACTOR_CKPT_TO_KEEP=${MAX_ACTOR_CKPT_TO_KEEP:-4}" in script
+    assert "CHECKPOINT_STEPS=25,50,75,100" in script
+    assert "MIN_FREE_DISK_GB=${MIN_FREE_DISK_GB:-40}" in script
+    assert "Insufficient free space" in script
     assert "USE_TASK_REWARDS=${USE_TASK_REWARDS:-False}" in script
     assert "RESUME_MODE=disable" in script
+
+    shared_script = _script("run_mopd_bridge_compare.sh")
+    assert 'verify_opd_routes.py "${TRAIN_FILE}" "${TEST_FILE}"' in shared_script
 
 
 def test_reverse_top32_wrapper_explicitly_selects_reverse_profile():

@@ -85,10 +85,10 @@ export REWARD_NUM_WORKERS=${REWARD_NUM_WORKERS:-4}
 export RAY_NUM_CPUS=${RAY_NUM_CPUS:-8}
 export TOTAL_EPOCHS=${TOTAL_EPOCHS:-1}
 export TOTAL_TRAINING_STEPS=${TOTAL_TRAINING_STEPS:-100}
-export SAVE_FREQ=${SAVE_FREQ:-100}
+export SAVE_FREQ=${SAVE_FREQ:-25}
 export TEST_FREQ=${TEST_FREQ:--1}
 export VAL_BEFORE_TRAIN=${VAL_BEFORE_TRAIN:-False}
-export MAX_ACTOR_CKPT_TO_KEEP=${MAX_ACTOR_CKPT_TO_KEEP:-1}
+export MAX_ACTOR_CKPT_TO_KEEP=${MAX_ACTOR_CKPT_TO_KEEP:-4}
 export RESUME_MODE=disable
 export ROLLOUT_DATA_ENABLED=${ROLLOUT_DATA_ENABLED:-True}
 export ROLLOUT_DATA_FREQ=${ROLLOUT_DATA_FREQ:-10}
@@ -98,12 +98,26 @@ export EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_mopd_forward_top32_all7_lora_
 export CHECKPOINT_DIR=${CHECKPOINT_DIR:-${ARTIFACT_ROOT}/checkpoints/${EXPERIMENT_NAME}}
 export ROLLOUT_DATA_DIR=${ROLLOUT_DATA_DIR:-${ARTIFACT_ROOT}/rollouts/${EXPERIMENT_NAME}}
 export LOG_FILE=${LOG_FILE:-${ARTIFACT_ROOT}/train_logs/${EXPERIMENT_NAME}.launch.log}
+export MIN_FREE_DISK_GB=${MIN_FREE_DISK_GB:-40}
 
 if [[ "${TRAIN_BATCH_SIZE}" != "16" || "${N_RESP_PER_PROMPT}" != "1" || \
       "${LORA_RANK}" != "32" || "${LORA_ALPHA}" != "64" || \
-      "${TOTAL_EPOCHS}" != "1" || "${TOTAL_TRAINING_STEPS}" != "100" ]]; then
-    echo "This 931 comparison profile is fixed to batch=16, n=1, LoRA r32/a64, and 100 steps." >&2
+      "${TOTAL_EPOCHS}" != "1" || "${TOTAL_TRAINING_STEPS}" != "100" || \
+      "${SAVE_FREQ}" != "25" || "${MAX_ACTOR_CKPT_TO_KEEP}" != "4" ]]; then
+    echo "This 931 comparison profile is fixed to batch=16, n=1, LoRA r32/a64, 100 steps, and checkpoints at 25/50/75/100." >&2
     exit 2
+fi
+if ! [[ "${MIN_FREE_DISK_GB}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "MIN_FREE_DISK_GB must be a positive integer; got ${MIN_FREE_DISK_GB}." >&2
+    exit 2
+fi
+
+available_disk_kb=$(df -Pk "${ARTIFACT_ROOT}" | awk 'NR == 2 {print $4}')
+required_disk_kb=$((MIN_FREE_DISK_GB * 1024 * 1024))
+if [[ -z "${available_disk_kb}" || "${available_disk_kb}" -lt "${required_disk_kb}" ]]; then
+    echo "Insufficient free space under ${ARTIFACT_ROOT}: need at least ${MIN_FREE_DISK_GB}GB before saving four approximately 9GB checkpoints." >&2
+    df -h "${ARTIFACT_ROOT}" >&2 || true
+    exit 5
 fi
 
 for d in "${CHECKPOINT_DIR}" "${ROLLOUT_DATA_DIR}"; do
@@ -135,6 +149,8 @@ echo "DISTILLATION_PROFILE=${DISTILLATION_PROFILE} DISTILLATION_LOSS_MODE=${DIST
 echo "USE_TASK_REWARDS=${USE_TASK_REWARDS} USE_POLICY_GRADIENT=False"
 echo "BRIDGE_TEACHER_ADAPTER=${BRIDGE_TEACHER_ADAPTER}"
 echo "COMPARE_TEACHER_ADAPTER=${COMPARE_TEACHER_ADAPTER}"
+echo "CHECKPOINT_STEPS=25,50,75,100 MAX_ACTOR_CKPT_TO_KEEP=${MAX_ACTOR_CKPT_TO_KEEP}"
+echo "MIN_FREE_DISK_GB=${MIN_FREE_DISK_GB}"
 echo "CHECKPOINT_DIR=${CHECKPOINT_DIR}"
 echo "LOG_FILE=${LOG_FILE}"
 

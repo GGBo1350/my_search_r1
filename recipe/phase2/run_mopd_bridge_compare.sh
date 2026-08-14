@@ -54,7 +54,7 @@ if (( expected_teacher_gpus != configured_teacher_gpus )); then
     exit 2
 fi
 
-"${PYTHON_BIN}" recipe/phase2/verify_opd_routes.py "${TRAIN_FILE}"
+"${PYTHON_BIN}" recipe/phase2/verify_opd_routes.py "${TRAIN_FILE}" "${TEST_FILE}"
 "${PYTHON_BIN}" recipe/phase2/verify_teacher_adapters.py \
     --rank "${TEACHER_LORA_RANK}" \
     --target-modules "${TEACHER_LORA_TARGET_MODULES}" \
