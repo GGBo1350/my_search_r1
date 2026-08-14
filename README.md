@@ -231,7 +231,7 @@ bash recipe/phase1/run_exact_answer_only_50step.sh
 
 ### 双 teacher OPD
 
-931 双卡入口固定使用 `forward_kl_topk/topk=32`。默认读取本项目保留的全 7 投影
+931 双卡入口固定使用 `forward_kl_topk/topk=16`。默认读取本项目保留的全 7 投影
 Bridge s75 与 Comparison s25 checkpoint；student 与两位 teacher 的 base 都固定来自同一
 Qwen3-4B Base。首次启动时会在 GPU 上导出并校验静态
 teacher adapter，已有完整 adapter 则直接复用：
@@ -280,7 +280,7 @@ bash recipe/phase2/run_eval_serial_bridge_then_compare_sample_k3_checkpoints_1gp
 该串行消融已完成：最终 s100 的整体 Exact/Mean F1/Strategy 为
 `0.560/0.698/0.825`；Comparison Exact/Strategy 为 `0.670/0.960`，但 Bridge
 Strategy 从 s75 的 `0.810` 回落到 `0.690`。双卡路由双 teacher Forward-KL
-Top-32 仍是待运行实验。各入口使用不同实验目录并拒绝覆盖已有产物。
+Top-16 仍是待运行实验。此前 Top-32 长跑在 actor backward 阶段显存不足，未产出可用 checkpoint。各入口使用不同实验目录并拒绝覆盖已有产物。
 
 ### Sample-token k3 OPD
 

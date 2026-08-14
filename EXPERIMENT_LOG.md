@@ -2,6 +2,10 @@
 
 > 按时间倒序记录各阶段实验：配置、结果、结论。配套总览见 [README.md](README.md)。
 
+## 2026-08-14 ｜ 双 Teacher Forward-KL Top-32 OOM
+
+运行 `20260814_123655` 使用双卡路由、全 7 投影 LoRA student、Bridge s75 / Comparison s25 teacher、`forward_kl_topk/topk=32`。训练在 actor backward 阶段因 CUDA OOM 终止：GPU 0 当时仅余约 268 MiB，反向传播仍需申请 1.46 GiB，因此未产出可用 checkpoint。为保持其余变量不变并单独检验蒸馏支持集大小的影响，931 默认入口随后改为 Forward-KL Top-16；若仍 OOM，再单独调整 PPO mini batch，而不把两项改动混在同一次对照中。
+
 ## 2026-08-14 ｜ Bridge→Comparison 串行 Sample-K3 OPD
 
 **配置**：OPD student 从独立的 Qwen3-4B Base 初始化，使用全 7 投影 LoRA（rank 32、alpha 64）。先在 1200 条 Bridge 数据上接受 Bridge teacher 的 sample-token `k=3` 蒸馏 75 step，再保留 student 模型、优化器、scheduler 与 RNG 状态，在 400 条 Comparison 数据上接受 Comparison teacher 蒸馏 25 step。GRPO/专项 checkpoint 只提供 teacher token 分布，不作为 student 初始化。训练运行 ID 为 `20260813_220646`。

@@ -85,7 +85,7 @@ Phase 2 从另一份 Base student 出发，用 student 自身 on-policy 轨迹�
 - `phase2/extract_teacher_lora.py`：从 veRL actor checkpoint 导出 PEFT adapter。
 - `phase2/verify_teacher_adapters.py`：校验 adapter 完整性、rank 和目标模块。
 - `phase2/prepare_full_lora_teacher_pair_931.sh`：从 931 保留的 Bridge s75 / Comparison s25 checkpoint 导出并校验全 7 投影 teacher adapter；完整产物可安全复用。
-- `phase2/run_mopd_bridge_compare_2gpu_931.sh`：双 teacher 路由的 Forward-KL Top-32 OPD。
+- `phase2/run_mopd_bridge_compare_2gpu_931.sh`：双 teacher 路由的 Forward-KL Top-16 OPD。
 - `phase2/run_single_teacher_sample_k3_1gpu_931.sh`：串行消融内部复用的单卡、单 teacher Sample-K3 阶段入口。
 - `phase2/run_serial_bridge_then_compare_sample_k3_1gpu_931.sh`：同一 Base student 在单卡上先接受 Bridge teacher 75 step、再接受 Comparison teacher 25 step 的 Sample-K3 串行消融；每段只加载当前 teacher，Bridge 保留 s25/s50/s75，Comparison 只保留最终 s100。
 - `phase2/run_eval_serial_bridge_then_compare_sample_k3_checkpoints_1gpu_931.sh`：按既有固定 200 条协议扫描串行消融的 Bridge s25/s50/s75 与最终 s100，支持复用已完成结果并自动生成 JSON/CSV/文本汇总。

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Two-GPU 931 profile for routed Bridge/Comparison Forward-KL Top-32 OPD.
+# Two-GPU 931 profile for routed Bridge/Comparison Forward-KL Top-16 OPD.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -50,17 +50,17 @@ export LORA_RANK=${LORA_RANK:-32}
 export LORA_ALPHA=${LORA_ALPHA:-64}
 export LORA_TARGET_MODULES=${LORA_TARGET_MODULES:-'[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'}
 
-export DISTILLATION_TOPK=${DISTILLATION_TOPK:-32}
+export DISTILLATION_TOPK=${DISTILLATION_TOPK:-16}
 export DISTILLATION_LOSS_MODE=${DISTILLATION_LOSS_MODE:-forward_kl_topk}
 export USE_TASK_REWARDS=${USE_TASK_REWARDS:-False}
-export DISTILLATION_PROFILE=${DISTILLATION_PROFILE:-forward_top32}
+export DISTILLATION_PROFILE=${DISTILLATION_PROFILE:-forward_top16}
 case "${DISTILLATION_PROFILE}" in
-    forward_top32) expected_loss_mode=forward_kl_topk ;;
-    reverse_top32) expected_loss_mode=reverse_kl_topk ;;
-    *) echo "DISTILLATION_PROFILE must be forward_top32 or reverse_top32." >&2; exit 2 ;;
+    forward_top16) expected_loss_mode=forward_kl_topk; expected_topk=16 ;;
+    reverse_top32) expected_loss_mode=reverse_kl_topk; expected_topk=32 ;;
+    *) echo "DISTILLATION_PROFILE must be forward_top16 or reverse_top32." >&2; exit 2 ;;
 esac
-if [[ "${DISTILLATION_LOSS_MODE}" != "${expected_loss_mode}" || "${DISTILLATION_TOPK}" != "32" || "${USE_TASK_REWARDS}" != "False" ]]; then
-    echo "Profile ${DISTILLATION_PROFILE} requires ${expected_loss_mode}/topk=32 with task rewards disabled." >&2
+if [[ "${DISTILLATION_LOSS_MODE}" != "${expected_loss_mode}" || "${DISTILLATION_TOPK}" != "${expected_topk}" || "${USE_TASK_REWARDS}" != "False" ]]; then
+    echo "Profile ${DISTILLATION_PROFILE} requires ${expected_loss_mode}/topk=${expected_topk} with task rewards disabled." >&2
     exit 2
 fi
 export MAX_PROMPT_LENGTH=${MAX_PROMPT_LENGTH:-1024}
@@ -94,7 +94,7 @@ export ROLLOUT_DATA_ENABLED=${ROLLOUT_DATA_ENABLED:-True}
 export ROLLOUT_DATA_FREQ=${ROLLOUT_DATA_FREQ:-10}
 export TRAINER_LOGGER=${TRAINER_LOGGER:-'["console","swanlab"]'}
 export PROJECT_NAME=${PROJECT_NAME:-search_r1_hotpotqa_v3_mopd}
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_mopd_forward_top32_all7_lora_r32_2gpu_${RUN_ID}}
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_mopd_forward_top16_all7_lora_r32_2gpu_${RUN_ID}}
 export CHECKPOINT_DIR=${CHECKPOINT_DIR:-${ARTIFACT_ROOT}/checkpoints/${EXPERIMENT_NAME}}
 export ROLLOUT_DATA_DIR=${ROLLOUT_DATA_DIR:-${ARTIFACT_ROOT}/rollouts/${EXPERIMENT_NAME}}
 export LOG_FILE=${LOG_FILE:-${ARTIFACT_ROOT}/train_logs/${EXPERIMENT_NAME}.launch.log}
