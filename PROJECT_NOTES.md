@@ -37,11 +37,14 @@ OPD student 从独立的 Qwen3-4B Base 初始化，在自身 on-policy 搜索轨
 
 - 全 7 投影 LoRA 的 Bridge s75 + Comparison s25 双静态 teacher，按 `teacher_route` 路由，Top-k forward KL。
 - Phase 1 s100 单静态 teacher，sample-token `k=3` 蒸馏。
-- 两项待运行的 931 对照入口：双卡路由双 teacher Forward-KL Top-32；以及单卡 Base student 内部按 Bridge 75 step → Comparison 25 step 连续训练的 Sample-K3 串行消融。
+- 待运行的 931 对照入口：双卡路由双 teacher Forward-KL Top-32。
+- 已完成单卡串行 Sample-K3 消融：独立 Base student 先接受 Bridge teacher 75 step，再接受 Comparison teacher 25 step；Bridge 保留 s25/s50/s75，最终 student 为 s100。
 - teacher 与 student adapter 的模块、rank、文件完整性在训练前 fail-closed 校验。
 - 训练时记录 teacher probability mass、token overlap、蒸馏 loss 与工具执行指标到 SwanLab。
 
 双 teacher OPD s100 的固定集结果为 Exact 0.545 / Strategy 0.855；sample-token OPD s25 为 0.585 / 0.780，s100 为 0.580 / 0.865。当前最佳综合结果仍来自 Phase 1 GRPO s100，OPD 则验证了不依赖任务 reward 的独立策略学习路径。
+
+串行 Sample-K3 s100 的固定集结果为 Exact 0.560 / Mean F1 0.698 / Strategy 0.825。Comparison 阶段将 Comparison Strategy 从 s75 的 0.150 提升到 0.960，但 Bridge Strategy 从 0.810 回落到 0.690，显示简单的单向串行蒸馏存在顺序干扰；后续更适合使用混合题型、Bridge replay 或路由双 teacher 保持两种策略。
 
 当前专项 teacher 在固定 200 条 greedy 评测中的路由内结果为：Bridge s75 的 Bridge Exact/Strategy `0.540/0.810`，Comparison s25 的 Comparison Exact/Strategy `0.700/0.980`。两者都从 Qwen3-4B Base 独立训练，LoRA 覆盖 `q/k/v/o_proj` 与 `gate/up/down_proj`。已完成的双 teacher OPD s100 属于此前独立运行，不能把更新后的 teacher 指标追溯解释为该 student 的训练配置。
 

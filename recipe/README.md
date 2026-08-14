@@ -88,9 +88,10 @@ Phase 2 从另一份 Base student 出发，用 student 自身 on-policy 轨迹�
 - `phase2/run_mopd_bridge_compare_2gpu_931.sh`：双 teacher 路由的 Forward-KL Top-32 OPD。
 - `phase2/run_single_teacher_sample_k3_1gpu_931.sh`：串行消融内部复用的单卡、单 teacher Sample-K3 阶段入口。
 - `phase2/run_serial_bridge_then_compare_sample_k3_1gpu_931.sh`：同一 Base student 在单卡上先接受 Bridge teacher 75 step、再接受 Comparison teacher 25 step 的 Sample-K3 串行消融；每段只加载当前 teacher，Bridge 保留 s25/s50/s75，Comparison 只保留最终 s100。
+- `phase2/run_eval_serial_bridge_then_compare_sample_k3_checkpoints_1gpu_931.sh`：按既有固定 200 条协议扫描串行消融的 Bridge s25/s50/s75 与最终 s100，支持复用已完成结果并自动生成 JSON/CSV/文本汇总。
 - `phase2/run_mopd_bridge_compare_reverse_top32_2gpu.sh`：双 teacher Reverse Top-32 OPD（teacher Top-k + other 桶）。
 - `phase2/run_opd_phase1_s100_sample_token_1gpu_805.sh`：单 teacher sample-token OPD。
-- `phase2/run_eval_mopd_student_931.sh` 与 `phase2/run_eval_opd_phase1_s100_sample_token_checkpoints_805.sh`：固定集评测。
+- `phase2/run_eval_mopd_student_931.sh` 与 `phase2/run_eval_opd_phase1_s100_sample_token_checkpoints_805.sh`：其他 OPD student 的固定集评测。
 
 ## 统一评测口径
 

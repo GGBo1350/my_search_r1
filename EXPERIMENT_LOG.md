@@ -2,6 +2,40 @@
 
 > 按时间倒序记录各阶段实验：配置、结果、结论。配套总览见 [README.md](README.md)。
 
+## 2026-08-14 ｜ Bridge→Comparison 串行 Sample-K3 OPD
+
+**配置**：OPD student 从独立的 Qwen3-4B Base 初始化，使用全 7 投影 LoRA（rank 32、alpha 64）。先在 1200 条 Bridge 数据上接受 Bridge teacher 的 sample-token `k=3` 蒸馏 75 step，再保留 student 模型、优化器、scheduler 与 RNG 状态，在 400 条 Comparison 数据上接受 Comparison teacher 蒸馏 25 step。GRPO/专项 checkpoint 只提供 teacher token 分布，不作为 student 初始化。训练运行 ID 为 `20260813_220646`。
+
+**统一评测口径**：固定 200 条验证集（100 Bridge + 100 Comparison），greedy 单次 rollout，关闭 LLM judge，使用既有 checkpoint 固定集入口与相同的 `2048/4096/3072` 长度、`3/4` 工具轮数设置。`s25/s50/s75` 来自 Bridge 阶段，`s100` 是继续完成 Comparison 阶段后的最终 student。
+
+| checkpoint | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format | Calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| s25 | 0.560 | 0.725 | 0.686 | 0.525 | 0.858 | 0.900 | 2.02 |
+| **s50** | **0.565** | 0.725 | 0.690 | 0.530 | **0.870** | **0.935** | 2.09 |
+| s75 | 0.560 | 0.730 | 0.692 | 0.480 | **0.870** | 0.930 | 2.12 |
+| **s100** | 0.560 | **0.735** | **0.698** | **0.825** | 0.833 | 0.925 | 1.97 |
+
+| checkpoint | 题型 | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format | Calls |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| s25 | Bridge | **0.460** | **0.640** | **0.597** | **0.820** | 0.785 | 0.890 | 2.06 |
+| s50 | Bridge | 0.430 | 0.620 | 0.581 | 0.810 | **0.795** | **0.910** | 2.16 |
+| s75 | Bridge | 0.440 | 0.630 | 0.593 | 0.810 | 0.790 | 0.890 | 2.20 |
+| s100 | Bridge | 0.450 | 0.630 | 0.597 | 0.690 | 0.730 | 0.870 | 1.88 |
+| s25 | Comparison | 0.660 | 0.810 | 0.775 | 0.230 | 0.930 | 0.910 | 1.97 |
+| **s50** | Comparison | **0.700** | 0.830 | 0.799 | 0.250 | 0.945 | 0.960 | 2.02 |
+| s75 | Comparison | 0.680 | 0.830 | 0.790 | 0.150 | **0.950** | 0.970 | 2.05 |
+| **s100** | Comparison | 0.670 | **0.840** | **0.800** | **0.960** | 0.935 | **0.980** | 2.06 |
+
+**结论**
+
+1. Bridge 阶段继续从 s25 训练到 s75 没有带来单调收益：Bridge Exact 从 `0.460` 变为 `0.440`，Strategy 基本持平于 `0.810–0.820`。若只选 Bridge 专项状态，s25 的答案与策略组合最好。
+2. Comparison 阶段产生了明确的目标行为迁移：s75→s100 时 Comparison Strategy 从 `0.150` 跃升到 `0.960`，同时 Comparison Exact 仅变化 `-1 pp`、Mean F1 提升约 `1 pp`。
+3. 该迁移伴随顺序干扰：Bridge Strategy 从 `0.810` 降至 `0.690`，Bridge Recall 从 `0.790` 降至 `0.730`。因此简单的 Bridge→Comparison 串行蒸馏没有无损合并两位 teacher 的策略。
+4. s100 是最终串行 student 的默认汇报点：它具有最高整体 Mean F1 `0.698`、F1≥0.5 `0.735` 与 Strategy `0.825`；s50 的整体 Exact 略高 `0.565`，但尚未学会 Comparison 并行策略。
+5. 相比 Qwen3-4B Base，s100 的 Exact 持平于 `0.560`，Strategy 提升 `42 pp`；相比 GRPO s100，整体 Exact/Strategy 仍低 `3/9 pp`。分题型看，s100 已匹配 GRPO 的 Comparison `0.670/0.960`，差距主要来自 Bridge（`0.450/0.690` vs. `0.510/0.870`）。这支持后续采用题型混合、Bridge replay 或路由双 teacher，而不是继续单向串行训练。
+
+**产物**：评测轨迹位于 `/root/autodl-tmp/rollouts/serial_k3_ckpt_eval_20260813_220646_20260814_112541/`，汇总报告位于 `/root/autodl-tmp/eval_reports/serial_k3_ckpt_eval_20260813_220646_20260814_112541/`。
+
 ## 2026-08-13 ｜ 全 7 投影 LoRA 专项 Teacher 定稿
 
 **统一口径**：Bridge 与 Comparison 专项 teacher 均从同一个 Qwen3-4B Base 独立初始化，LoRA 覆盖 `q/k/v/o_proj` 与 `gate/up/down_proj`，rank 32、alpha 64。固定 200 条验证集（100 Bridge + 100 Comparison），greedy 单次 rollout，关闭 LLM judge，并离线严格复算 Exact/F1、Strategy、Recall、Format 与工具调用数。

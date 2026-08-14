@@ -36,10 +36,11 @@ flowchart LR
 - **OPD 路线**：另一个 Qwen3-4B Base → student on-policy 工具轨迹 → teacher token 评分 → OPD 模型。
 - GRPO/专项 checkpoint 在 OPD 中只作为 teacher 评分源；OPD student **不加载 GRPO 权重续训**。
 
-OPD 内部实现了两种配置：
+OPD 内部实现了三种配置：
 
 1. 全 7 投影 LoRA 的 Bridge s75 / Compare s25 双 teacher，按题型路由，top-32 forward KL；
-2. GRPO s100 单 teacher，sample-token k3，全 7 投影 LoRA。
+2. GRPO s100 单 teacher，sample-token k3，全 7 投影 LoRA；
+3. 独立 Base student 先接受 Bridge teacher 75 step、再接受 Compare teacher 25 step 的串行 sample-token k3 消融。
 
 ## 实验结果
 
@@ -62,6 +63,7 @@ Bridge s75 负责先读取第一跳工具结果、再生成第二跳查询的 `[
 | Dual-teacher OPD s100 | 0.545 | 0.700 | 0.664 | 0.855 | 0.848 | 0.915 | 2.01 |
 | Sample-token OPD s25 | 0.585 | 0.745 | 0.711 | 0.780 | 0.863 | **0.965** | 2.03 |
 | Sample-token OPD s100 | 0.580 | 0.735 | 0.704 | 0.865 | 0.873 | 0.945 | 2.12 |
+| Serial Bridge→Compare Sample-K3 s100 | 0.560 | 0.735 | 0.698 | 0.825 | 0.833 | 0.925 | 1.97 |
 
 主要发现：
 
@@ -69,6 +71,7 @@ Bridge s75 负责先读取第一跳工具结果、再生成第二跳查询的 `[
 - Comparison 的答案准确率变化不大，但正确同轮并行率显著提高；只看最终答案会漏掉这一能力。
 - GRPO s100 综合最佳；继续到 s125 后 Exact/Strategy 回落到 `0.570/0.895`，因此使用固定集早停。
 - sample-token OPD s25 更偏答案，s100 更偏策略：s25→s100 的 Strategy 从 `0.780` 到 `0.865`，Exact 从 `0.585` 到 `0.580`。
+- 串行 Sample-K3 的 Comparison 阶段把并行策略从 s75 的 `0.150` 提升到 s100 的 `0.960`，但 Bridge 串行策略从 `0.810` 回落到 `0.690`；简单串行存在明显顺序干扰。
 - 当前 OPD 答案质量接近 GRPO，但综合策略仍稍弱；这是一条有效的独立训练路线，不是 GRPO 的升级阶段。
 
 ### 分题型结果
@@ -79,6 +82,7 @@ Bridge s75 负责先读取第一跳工具结果、再生成第二跳查询的 `[
 | GRPO s100 | **0.510 / 0.870** | 0.670 / **0.960** |
 | Dual-teacher OPD s100 | 0.420 / 0.770 | 0.670 / 0.940 |
 | Sample-token OPD s100 | 0.460 / 0.830 | **0.700** / 0.900 |
+| Serial Bridge→Compare Sample-K3 s100 | 0.450 / 0.690 | 0.670 / **0.960** |
 
 Bridge 仍是主要瓶颈：第一跳实体识别、第二跳 query rewrite 和最终答案边界都会影响结果。
 
@@ -265,8 +269,18 @@ TRAINER_LOGGER='["console","swanlab"]' \
 bash recipe/phase2/run_serial_bridge_then_compare_sample_k3_1gpu_931.sh
 ```
 
-两个新入口使用不同实验目录且拒绝覆盖非空 checkpoint、rollout 或日志路径。这些是待运行
-实验配置；在完成固定 200 条评测前，不计入上文已有结果表。
+固定 200 条 checkpoint 扫描：
+
+```bash
+SERIAL_RUN_ID=<training-run-id> \
+EVAL_RUN_ID=$(date +%Y%m%d_%H%M%S) \
+bash recipe/phase2/run_eval_serial_bridge_then_compare_sample_k3_checkpoints_1gpu_931.sh
+```
+
+该串行消融已完成：最终 s100 的整体 Exact/Mean F1/Strategy 为
+`0.560/0.698/0.825`；Comparison Exact/Strategy 为 `0.670/0.960`，但 Bridge
+Strategy 从 s75 的 `0.810` 回落到 `0.690`。双卡路由双 teacher Forward-KL
+Top-32 仍是待运行实验。各入口使用不同实验目录并拒绝覆盖已有产物。
 
 ### Sample-token k3 OPD
 
