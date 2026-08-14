@@ -19,6 +19,9 @@ def test_931_mopd_launcher_is_fixed_to_sample_token_k3_and_full_lora():
     assert "reverse_top32) expected_loss_mode=reverse_kl_topk; expected_topk=32" in script
     assert "distillation.distillation_loss.loss_max_clamp=10.0" in script
     assert "distillation.distillation_loss.log_prob_min_clamp=-10.0" in script
+    assert "AGENT_NUM_WORKERS=${AGENT_NUM_WORKERS:-2}" in script
+    assert 'AGENT_TOOL_GPU_DEVICES=${AGENT_TOOL_GPU_DEVICES:-\'[0,1]\'}' in script
+    assert '"${AGENT_NUM_WORKERS}" != "2"' in script
     assert "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" in script
     assert "prepare_full_lora_teacher_pair_931.sh" in script
     assert "TOTAL_TRAINING_STEPS=${TOTAL_TRAINING_STEPS:-100}" in script

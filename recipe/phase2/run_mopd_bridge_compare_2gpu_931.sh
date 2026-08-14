@@ -79,7 +79,7 @@ export TEACHER_MAX_NUM_SEQS=${TEACHER_MAX_NUM_SEQS:-4}
 export ROLLOUT_ENABLE_SLEEP_MODE=${ROLLOUT_ENABLE_SLEEP_MODE:-True}
 export ROLLOUT_FREE_CACHE_ENGINE=${ROLLOUT_FREE_CACHE_ENGINE:-True}
 
-export AGENT_NUM_WORKERS=${AGENT_NUM_WORKERS:-4}
+export AGENT_NUM_WORKERS=${AGENT_NUM_WORKERS:-2}
 export AGENT_TOOL_GPU_DEVICES=${AGENT_TOOL_GPU_DEVICES:-'[0,1]'}
 export REWARD_NUM_WORKERS=${REWARD_NUM_WORKERS:-4}
 export RAY_NUM_CPUS=${RAY_NUM_CPUS:-8}
@@ -103,8 +103,9 @@ export MIN_FREE_DISK_GB=${MIN_FREE_DISK_GB:-40}
 if [[ "${TRAIN_BATCH_SIZE}" != "16" || "${N_RESP_PER_PROMPT}" != "1" || \
       "${LORA_RANK}" != "32" || "${LORA_ALPHA}" != "64" || \
       "${TOTAL_EPOCHS}" != "1" || "${TOTAL_TRAINING_STEPS}" != "100" || \
-      "${SAVE_FREQ}" != "25" || "${MAX_ACTOR_CKPT_TO_KEEP}" != "4" ]]; then
-    echo "This 931 comparison profile is fixed to batch=16, n=1, LoRA r32/a64, 100 steps, and checkpoints at 25/50/75/100." >&2
+      "${SAVE_FREQ}" != "25" || "${MAX_ACTOR_CKPT_TO_KEEP}" != "4" || \
+      "${AGENT_NUM_WORKERS}" != "2" ]]; then
+    echo "This 931 comparison profile is fixed to batch=16, n=1, LoRA r32/a64, 2 tool workers, 100 steps, and checkpoints at 25/50/75/100." >&2
     exit 2
 fi
 if ! [[ "${MIN_FREE_DISK_GB}" =~ ^[1-9][0-9]*$ ]]; then
@@ -152,6 +153,7 @@ fi
 echo "USE_TASK_REWARDS=${USE_TASK_REWARDS} USE_POLICY_GRADIENT=False"
 echo "BRIDGE_TEACHER_ADAPTER=${BRIDGE_TEACHER_ADAPTER}"
 echo "COMPARE_TEACHER_ADAPTER=${COMPARE_TEACHER_ADAPTER}"
+echo "AGENT_NUM_WORKERS=${AGENT_NUM_WORKERS} AGENT_TOOL_GPU_DEVICES=${AGENT_TOOL_GPU_DEVICES}"
 echo "CHECKPOINT_STEPS=25,50,75,100 MAX_ACTOR_CKPT_TO_KEEP=${MAX_ACTOR_CKPT_TO_KEEP}"
 echo "MIN_FREE_DISK_GB=${MIN_FREE_DISK_GB}"
 echo "CHECKPOINT_DIR=${CHECKPOINT_DIR}"

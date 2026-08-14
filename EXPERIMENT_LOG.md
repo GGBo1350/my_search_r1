@@ -4,7 +4,7 @@
 
 ## 2026-08-14 ｜ 双 Teacher Forward-KL Top-32 OOM
 
-运行 `20260814_123655` 使用双卡路由、全 7 投影 LoRA student、Bridge s75 / Comparison s25 teacher、`forward_kl_topk/topk=32`。训练在 actor backward 阶段因 CUDA OOM 终止：GPU 0 当时仅余约 268 MiB，反向传播仍需申请 1.46 GiB，因此未产出可用 checkpoint。后续默认入口改为 sample-token `k=3`（`loss_mode=k3`、`topk=null`），仅请求 student 实际采样 token 的 teacher log-prob，继续保持 teacher 路由、数据、student 初始化和保存策略不变。
+运行 `20260814_123655` 使用双卡路由、全 7 投影 LoRA student、Bridge s75 / Comparison s25 teacher、`forward_kl_topk/topk=32`。训练在 actor backward 阶段因 CUDA OOM 终止：GPU 0 当时仅余约 268 MiB，反向传播仍需申请 1.46 GiB，因此未产出可用 checkpoint。后续默认入口改为 sample-token `k=3`（`loss_mode=k3`、`topk=null`），仅请求 student 实际采样 token 的 teacher log-prob，继续保持 teacher 路由、数据、student 初始化和保存策略不变。K3 重跑 `20260814_132111` 成功完成前 4 个 actor update，但在 FSDP 导出 LoRA 并同步 rollout 权重时再次 OOM：仅需追加 24 MiB，而 GPU 0 只剩 17.94 MiB。日志确认同卡有两个 AgentLoop 检索进程分别占约 6.88/5.33 GiB，因此后续入口将工具 worker 从 4 个减为 2 个，并按 `[0,1]` 每卡各放一个；损失、batch 和 teacher 配置保持不变。
 
 ## 2026-08-14 ｜ Bridge→Comparison 串行 Sample-K3 OPD
 
