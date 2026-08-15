@@ -2,6 +2,48 @@
 
 > 按时间倒序记录各阶段实验：配置、结果、结论。配套总览见 [README.md](README.md)。
 
+## 2026-08-15 ｜ 双 Teacher 路由 MOPD Sample-K3 完整训练与评测
+
+**配置**：运行 `20260814_200626` 使用单张 96 GB GPU、独立 Qwen3-4B Base student、全 7 投影 LoRA（rank 32、alpha 64），在 1200 Bridge + 400 Comparison 混合数据上训练 100 step。每条样本按 `teacher_route` 选择 Bridge s75 或 Compare s25 teacher，关闭 task reward 与 policy gradient，使用 sample-token `k=3` 蒸馏。训练 batch 为 16、mini batch 为 4、micro batch 为 1、每题 1 条 rollout；teacher 最大并发为 2，并在 teacher 打分结束后、actor backward 前释放静态 teacher KV cache。
+
+训练总耗时 2 h 32 min 56 s，平均约 91.75 s/step；保存 s25/s50/s75/s100 四个 checkpoint。统一评测仍为固定 200 题、greedy 单次 rollout、关闭 LLM judge。
+
+| checkpoint | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format | Calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| s25 | 0.580 | 0.730 | 0.692 | 0.810 | 0.853 | 0.930 | 2.04 |
+| **s50** | **0.585** | **0.750** | **0.712** | 0.830 | **0.873** | **0.950** | 2.11 |
+| s75 | 0.575 | 0.725 | 0.690 | 0.875 | 0.860 | **0.950** | 2.00 |
+| **s100** | 0.575 | 0.725 | 0.701 | **0.890** | 0.863 | 0.945 | 2.05 |
+
+| checkpoint | 题型 | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format | Calls |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| s25 | Bridge | 0.480 | 0.650 | 0.607 | 0.780 | 0.780 | 0.910 | 2.10 |
+| s50 | Bridge | **0.480** | **0.650** | **0.613** | 0.760 | **0.805** | 0.900 | 2.17 |
+| s75 | Bridge | 0.470 | 0.630 | 0.596 | **0.830** | 0.785 | **0.920** | 1.98 |
+| s100 | Bridge | 0.450 | 0.600 | 0.583 | **0.830** | 0.800 | **0.920** | 2.07 |
+| s25 | Comparison | 0.680 | 0.810 | 0.777 | 0.840 | 0.925 | 0.950 | 1.98 |
+| s50 | Comparison | 0.690 | **0.850** | 0.810 | 0.900 | **0.940** | **1.000** | 2.04 |
+| s75 | Comparison | 0.680 | 0.820 | 0.784 | 0.920 | 0.935 | 0.980 | 2.01 |
+| s100 | Comparison | **0.700** | **0.850** | **0.819** | **0.950** | 0.925 | 0.970 | 2.02 |
+
+**Checkpoint 选择**
+
+1. 按 Strict Exact 优先、Mean F1 次优的答案口径，MOPD 主分数取 s50：`0.585 Exact / 0.712 Mean F1 / 0.830 Strategy`。
+2. 按搜索行为选择，MOPD 策略点取 s100：`0.575 Exact / 0.701 Mean F1 / 0.890 Strategy`。不能用 s100 覆盖 s50 的答案峰值，也不能只报 s50 忽略后续策略收益。
+3. 相比串行 OPD s100，MOPD s100 的整体 Strategy 高 `6.5 pp`，Bridge Strategy 高 `14 pp`，说明混合题型路由缓解了 Bridge→Comparison 顺序蒸馏的最后教师偏置。
+4. 与 GRPO s100 相比，MOPD s50 的 Exact 只低 `0.5 pp`、Mean F1 低约 `0.84 pp`；GRPO 的 Strategy 仍高 `8.5 pp`。
+
+**错误状态摘要**：下列四个故障列可重叠，不能相加为 Strict 错误总数。
+
+| checkpoint | 题型 | Strict 错误 | 拓扑错误 | gold-title 召回不全 | 完整召回但答案错 | 格式错误 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| s50 | Bridge | 52 | 17 | 26 | 26 | 10 |
+| s50 | Comparison | 31 | 5 | 5 | 26 | 0 |
+| s100 | Bridge | 55 | 14 | 29 | 26 | 8 |
+| s100 | Comparison | 30 | 3 | 7 | 23 | 3 |
+
+MOPD 从 s50 到 s100 减少了拓扑错误，但答案分略回落；Bridge 剩余瓶颈集中在第二跳检索/query rewrite 与完整证据后的答案抽取，Comparison 则主要是完整召回后的比较逻辑和严格答案边界。完整模型矩阵与逐题案例见 [`docs/final_model_comparison.md`](docs/final_model_comparison.md)。
+
 ## 2026-08-14 ｜ 双 Teacher Forward-KL Top-32 OOM
 
 运行 `20260814_123655` 使用双卡路由、全 7 投影 LoRA student、Bridge s75 / Comparison s25 teacher、`forward_kl_topk/topk=32`。训练在 actor backward 阶段因 CUDA OOM 终止：GPU 0 当时仅余约 268 MiB，反向传播仍需申请 1.46 GiB，因此未产出可用 checkpoint。后续默认入口改为 sample-token `k=3`（`loss_mode=k3`、`topk=null`），仅请求 student 实际采样 token 的 teacher log-prob，继续保持 teacher 路由、数据、student 初始化和保存策略不变。K3 重跑 `20260814_132111` 成功完成前 4 个 actor update，但在 FSDP 导出 LoRA 并同步 rollout 权重时再次 OOM：仅需追加 24 MiB，而 GPU 0 只剩 17.94 MiB。日志确认同卡有两个 AgentLoop 检索进程分别占约 6.88/5.33 GiB，因此后续入口将工具 worker 从 4 个减为 2 个，并按 `[0,1]` 每卡各放一个；损失、batch 和 teacher 配置保持不变。
@@ -35,7 +77,7 @@
 1. Bridge 阶段继续从 s25 训练到 s75 没有带来单调收益：Bridge Exact 从 `0.460` 变为 `0.440`，Strategy 基本持平于 `0.810–0.820`。若只选 Bridge 专项状态，s25 的答案与策略组合最好。
 2. Comparison 阶段产生了明确的目标行为迁移：s75→s100 时 Comparison Strategy 从 `0.150` 跃升到 `0.960`，同时 Comparison Exact 仅变化 `-1 pp`、Mean F1 提升约 `1 pp`。
 3. 该迁移伴随顺序干扰：Bridge Strategy 从 `0.810` 降至 `0.690`，Bridge Recall 从 `0.790` 降至 `0.730`。因此简单的 Bridge→Comparison 串行蒸馏没有无损合并两位 teacher 的策略。
-4. s100 是最终串行 student 的默认汇报点：它具有最高整体 Mean F1 `0.698`、F1≥0.5 `0.735` 与 Strategy `0.825`；s50 的整体 Exact 略高 `0.565`，但尚未学会 Comparison 并行策略。
+4. 串行结果同时保留两个点：s50 是答案最佳（Exact `0.565`），但尚未学会 Comparison 并行策略；s100 是策略最佳，具有最高整体 Mean F1 `0.698`、F1≥0.5 `0.735` 与 Strategy `0.825`。
 5. 相比 Qwen3-4B Base，s100 的 Exact 持平于 `0.560`，Strategy 提升 `42 pp`；相比 GRPO s100，整体 Exact/Strategy 仍低 `3/9 pp`。分题型看，s100 已匹配 GRPO 的 Comparison `0.670/0.960`，差距主要来自 Bridge（`0.450/0.690` vs. `0.510/0.870`）。这支持后续采用题型混合、Bridge replay 或路由双 teacher，而不是继续单向串行训练。
 
 **产物**：评测轨迹位于 `/root/autodl-tmp/rollouts/serial_k3_ckpt_eval_20260813_220646_20260814_112541/`，汇总报告位于 `/root/autodl-tmp/eval_reports/serial_k3_ckpt_eval_20260813_220646_20260814_112541/`。
