@@ -1,21 +1,22 @@
-# Search-R1：Base、GRPO、双教师、串行 OPD 与 MOPD 最终对比
+# Search-R1：Base、Exact-only、GRPO、双教师、串行 OPD 与 MOPD 最终对比
 
 > 整理日期：2026-08-15
 > 评测口径：固定 200 题（Bridge 100 + Comparison 100）、greedy 单次 rollout、统一答案与过程指标
-> 模型范围：Qwen3-4B Base、通用 GRPO s100、两位专项 teacher、Bridge→Comparison 串行 OPD s50/s100、双教师路由 MOPD s50/s100
+> 模型范围：Qwen3-4B Base、Exact-only s50、通用 GRPO s100、两位专项 teacher、Bridge→Comparison 串行 OPD s50/s100、双教师路由 MOPD s50/s100
 
 ## 1. 最终结论
 
-这组实验得到的不是一个简单的“后一个模型全面超过前一个模型”，而是五种训练方式在答案、检索拓扑、证据召回和多策略保持上的清晰分工：
+这组实验得到的不是一个简单的“后一个模型全面超过前一个模型”，而是六种训练方式在答案、检索拓扑、证据召回和多策略保持上的清晰分工：
 
 1. **Base 已有问答知识，但不会稳定组织搜索。** Overall Exact 为 56%，Comparison Exact 已有 68%，但整体 Strategy 只有 40.5%，Comparison 正确单轮并行只有 18%。
-2. **GRPO 是综合表现最好的单 student checkpoint。** s100 达到 59% Exact、72.01% mean F1、91.5% Strategy；相对 Base 最大收益不是 Exact 的 +3 pp，而是 Strategy 的 +51 pp。
-3. **路由双教师是能力参考上限，不是单一 student。** Bridge teacher s75 与 Compare teacher s25 按题型组合后达到 62% Exact、74.41% F1、89.5% Strategy。它说明专项策略轨迹具有互补性，但部署时需要保留两套 adapter/推理实例。
-4. **串行 OPD 学会了最后一个教师，却遗忘了前一个教师。** 从 Bridge 切换到 Comparison 后，Compare Strategy 从 15% 升至 96%，Bridge Strategy 却从 81% 降至 69%，呈现明显的顺序干扰。
-5. **MOPD 必须同时报告答案峰值和策略峰值。** 以 Strict Exact 为主选择标准时，MOPD s50 最好：58.5% Exact、71.17% mean F1、83% Strategy；继续到 s100 后 Strategy 升至 89%，但 Exact/F1 回落到 57.5%/70.09%。因此主分数采用 s50，行为保持采用 s100。
-6. **串行 OPD 也存在同样的 checkpoint 权衡。** s50 的 Exact 最高，为 56.5%，但整体 Strategy 只有 53%，Comparison Strategy 仅 25%；s100 的 Exact 略降至 56%，Strategy 升至 82.5%，同时 Bridge Strategy 因教师切换降至 69%。
-7. **MOPD s100 把 Bridge 错误从上游移到了下游。** 串行 OPD s100 有 23 个 Bridge 错误同时表现为“拓扑错误+召回不全”，MOPD s100 降到 14 个；MOPD s100 有 26 个错误已经“拓扑正确+完整召回”，说明搜索链更可靠，剩余瓶颈转向证据聚合和答案抽取。
-8. **Comparison 已接近策略饱和。** GRPO、Compare teacher、串行 OPD s100、MOPD s100 的 Comparison Strategy 分别为 96%/98%/96%/95%；继续加大并行拓扑奖励的边际收益很小，后续更应优化比较推理与短答案边界。
+2. **Exact-only 说明答案奖励不能替代过程奖励。** s50 的 Overall Exact 为 53.5%、Strategy 仅 23.5%；Comparison 虽有 67% Exact，但正确 `[2]` 并行率为 0，模型可以在错误搜索拓扑下依靠参数知识或偶然证据答对。
+3. **GRPO 是综合表现最好的单 student checkpoint。** s100 达到 59% Exact、72.01% mean F1、91.5% Strategy；相比 Exact-only，Exact 提升 5.5 pp，Strategy 提升 68 pp。
+4. **路由双教师是能力参考上限，不是单一 student。** Bridge teacher s75 与 Compare teacher s25 按题型组合后达到 62% Exact、74.41% F1、89.5% Strategy。它说明专项策略轨迹具有互补性，但部署时需要保留两套 adapter/推理实例。
+5. **串行 OPD 学会了最后一个教师，却遗忘了前一个教师。** 从 Bridge 切换到 Comparison 后，Compare Strategy 从 15% 升至 96%，Bridge Strategy 却从 81% 降至 69%，呈现明显的顺序干扰。
+6. **MOPD 必须同时报告答案峰值和策略峰值。** 以 Strict Exact 为主选择标准时，MOPD s50 最好：58.5% Exact、71.17% mean F1、83% Strategy；继续到 s100 后 Strategy 升至 89%，但 Exact/F1 回落到 57.5%/70.09%。因此主分数采用 s50，行为保持采用 s100。
+7. **串行 OPD 也存在同样的 checkpoint 权衡。** s50 的 Exact 最高，为 56.5%，但整体 Strategy 只有 53%，Comparison Strategy 仅 25%；s100 的 Exact 略降至 56%，Strategy 升至 82.5%，同时 Bridge Strategy 因教师切换降至 69%。
+8. **MOPD s100 把 Bridge 错误从上游移到了下游。** 串行 OPD s100 有 23 个 Bridge 错误同时表现为“拓扑错误+召回不全”，MOPD s100 降到 14 个；MOPD s100 有 26 个错误已经“拓扑正确+完整召回”，说明搜索链更可靠，剩余瓶颈转向证据聚合和答案抽取。
+9. **Comparison 已接近策略饱和。** GRPO、Compare teacher、串行 OPD s100、MOPD s100 的 Comparison Strategy 分别为 96%/98%/96%/95%；继续加大并行拓扑奖励的边际收益很小，后续更应优化比较推理与短答案边界。
 
 ## 2. 实验关系：不是阶段继承
 
@@ -23,6 +24,8 @@
 同一个 Qwen3-4B Base、同一搜索工具与固定评测集
 │
 ├─ Base：不训练，直接评测
+│
+├─ Exact-only：仅严格答案奖励 → Exact-only s50
 │
 ├─ GRPO generalist：任务奖励 + 过程奖励 → 通用 GRPO s100
 │
@@ -48,6 +51,7 @@ GRPO 与 OPD/MOPD 是两条并列训练范式：
 | 模型 | 训练信号 | 调度 | 每 step prompt / rollout | 训练步数 | 平均秒/step | 约计训练时间 |
 |---|---|---|---:|---:|---:|---:|
 | Base | 无 | 无 | — | 0 | — | — |
+| Exact-only | 严格 Exact reward | Bridge/Compare 混合 | 16 / 128（`n=8`） | 50 | — | — |
 | 通用 GRPO | 任务/过程 reward | Bridge/Compare 混合 | 16 / 128（`n=8`） | 100（最佳点） | 约 271.6 s | 约 7 h 33 min |
 | Bridge + Compare teachers | 任务/过程 reward | 两个专家分别训练 | 16 / 128（`n=8`） | 75 + 25 | 288.3 / 253.5 s | 串行约 7 h 49 min |
 | 串行 OPD | sample-token K=3 | Bridge 75 → Compare 25 | 16 / 16（`n=1`） | 100 | 加权约 95.24 s | 约 2 h 43 min |
@@ -72,6 +76,7 @@ GRPO 与 OPD/MOPD 是两条并列训练范式：
 
 | 训练族 | 答案最佳 checkpoint | Exact / Mean F1 / Strategy | 策略最佳 checkpoint | Exact / Mean F1 / Strategy |
 |---|---|---:|---|---:|
+| Exact-only | s50 | **0.535 / 0.657 / 0.235** | s50 | **0.535 / 0.657 / 0.235** |
 | 通用 GRPO | s100 | **0.590 / 0.720 / 0.915** | s100 | **0.590 / 0.720 / 0.915** |
 | Bridge teacher | **s75** | **0.540 / 0.663 / 0.810** | **s50** | 0.490 / 0.639 / **0.850** |
 | Compare teacher | **s25** | **0.700 / 0.825 / 0.980** | **s25** | **0.700 / 0.825 / 0.980** |
@@ -100,12 +105,15 @@ Bridge teacher s75 在 Comparison 上有全表最高的 71% Exact，却只有 7%
 | 模型 | 定位 | Exact | Mean F1 | Strategy | Recall | Format | Calls | Exact∩Strategy |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | Base | 基线 | 56.0% | 68.74% | 40.5% | 84.00% | 93.0% | 1.88 | 24.5% |
+| Exact-only s50 | 仅答案奖励消融 | 53.5% | 65.69% | 23.5% | 75.25% | 91.0% | 1.68 | 11.5% |
 | **GRPO s100** | 答案/策略均最佳 | **59.0%** | **72.01%** | **91.5%** | **87.75%** | 95.5% | 2.07 | **56.0%** |
 | 路由双教师 | 专家参考上限 | **62.0%** | **74.41%** | 89.5% | 87.25% | **95.5%** | 2.08 | **59.0%** |
 | Serial OPD s50 | **Serial 答案最佳** | **56.5%** | 68.97% | 53.0% | 87.00% | 93.5% | 2.09 | 31.0% |
 | Serial OPD s100 | Serial 策略最佳 | 56.0% | **69.83%** | **82.5%** | 83.25% | 92.5% | 1.97 | **51.0%** |
 | MOPD s50 | **MOPD 答案最佳** | **58.5%** | **71.17%** | 83.0% | **87.25%** | **95.0%** | 2.11 | 52.5% |
 | MOPD s100 | MOPD 策略最佳 | 57.5% | 70.09% | **89.0%** | 86.25% | 94.5% | 2.05 | **55.0%** |
+
+GRPO s100 相比 Exact-only s50 的 Exact 提升 5.5 pp、Mean F1 提升 6.32 pp，Strategy 提升 68 pp；收益主要来自过程奖励对检索召回与调用拓扑的直接约束，而不是只让模型更会猜最终答案。
 
 从答案分数看，MOPD s50 只比 GRPO s100 低 0.5 pp Exact、0.84 pp mean F1，是 OPD/MOPD 中最接近 GRPO 的 checkpoint；从行为看，MOPD s100 的 Strategy 比 s50 高 6 pp，`Exact∩Strategy` 也由 52.5% 升到 55%。两者都应保留，不能用 s100 取代 s50 的答案峰值。
 
@@ -118,6 +126,7 @@ Bridge teacher s75 在 Comparison 上有全表最高的 71% Exact，却只有 7%
 | 模型 | checkpoint 定位 | Exact | Mean F1 | Strategy `[1,1]` | Recall | Format | Calls | Exact∩Strategy |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | Base | 基线 | 44% | 59.04% | 63% | 74.5% | 94% | 1.86 | 34% |
+| Exact-only s50 | 仅答案奖励消融 | 40% | 53.48% | 47% | 61.5% | 89% | 1.54 | 23% |
 | **GRPO s100** | 答案/策略均最佳 | 51% | 65.34% | **87%** | **82.5%** | 94% | 2.09 | 47% |
 | Bridge teacher s75 | **Teacher 答案最佳** | **54%** | **66.33%** | 81% | 81% | 92% | 2.14 | **48%** |
 | Bridge teacher s50 | Teacher 策略最佳 | 49% | 63.87% | **85%** | **82%** | **95%** | 2.08 | — |
@@ -138,6 +147,7 @@ Bridge 是最能区分几种训练方法的题型：
 | 模型 | checkpoint 定位 | Exact | Mean F1 | Strategy `[2]` | Recall | Format | Calls | Exact∩Strategy |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | Base | 基线 | 68% | 78.44% | 18% | 93.5% | 92% | 1.89 | 15% |
+| Exact-only s50 | 仅答案奖励消融 | 67% | 77.91% | **0%** | 89.0% | 93% | 1.82 | **0%** |
 | GRPO s100 | 答案/策略均最佳 | 67% | 78.68% | 96% | 93.0% | 97% | 2.04 | 65% |
 | **Compare teacher s25** | **Teacher 答案/策略最佳** | **70%** | **82.48%** | **98%** | **93.5%** | **99%** | 2.02 | **70%** |
 | Serial OPD s50 | Serial 总体 Exact 最佳 | **70%** | 79.88% | 25% | **94.5%** | 96% | 2.02 | 20% |
@@ -172,6 +182,7 @@ Base 的 Comparison Exact 已有 68%，但真正同轮双查只有 18%。Serial 
 | 模型 | checkpoint 定位 | Strict 错误 | 拓扑错+召回不全 | 拓扑错+完整召回 | 拓扑对+召回不全 | 拓扑对+完整召回 |
 |---|---|---:|---:|---:|---:|---:|
 | Base | 基线 | 56 | 26 | 1 | 12 | 17 |
+| Exact-only s50 | 仅答案奖励消融 | 60 | **36** | 0 | 14 | 10 |
 | GRPO s100 | 答案/策略均最佳 | **49** | 9 | 0 | 14 | **26** |
 | Bridge teacher s75 | Teacher 答案最佳 | **46** | 13 | 0 | 14 | 19 |
 | Serial OPD s50 | Serial 答案最佳 | 57 | 17 | 1 | 12 | 27 |
@@ -192,6 +203,7 @@ Base 的 Comparison Exact 已有 68%，但真正同轮双查只有 18%。Serial 
 | 模型 | checkpoint 定位 | 拓扑错误 | gold-title 召回不全 | 完整召回但答案错 | 格式错误 |
 |---|---|---:|---:|---:|---:|
 | Base | 基线 | 27 | 38 | 18 | 6 |
+| Exact-only s50 | 仅答案奖励消融 | **36** | **50** | 10 | 11 |
 | GRPO s100 | 答案/策略均最佳 | 9 | 23 | 26 | 6 |
 | Bridge teacher s75 | Teacher 答案最佳 | 13 | 27 | 19 | 8 |
 | Serial OPD s50 | Serial 答案最佳 | 18 | 29 | 28 | 9 |
@@ -221,6 +233,7 @@ GRPO s100 的 49 个 Bridge Strict 错误已经逐题人工检查，可进一步
 | 模型 | checkpoint 定位 | Strict 错误 | 拓扑错+召回不全 | 拓扑错+完整召回 | 拓扑对+召回不全 | 拓扑对+完整召回 |
 |---|---|---:|---:|---:|---:|---:|
 | Base | 基线 | 32 | 7 | **22** | 0 | 3 |
+| Exact-only s50 | 仅答案奖励消融 | 33 | 9 | **24** | 0 | 0 |
 | GRPO s100 | 答案/策略均最佳 | 33 | 1 | 1 | 6 | 25 |
 | Compare teacher s25 | Teacher 答案/策略最佳 | **30** | 1 | 1 | 5 | 23 |
 | Serial OPD s50 | Serial 答案最佳 | **30** | 5 | **20** | 0 | 5 |
@@ -228,13 +241,14 @@ GRPO s100 的 49 个 Bridge Strict 错误已经逐题人工检查，可进一步
 | MOPD s50 | MOPD 答案最佳 | 31 | 2 | 3 | **3** | 23 |
 | MOPD s100 | MOPD 策略最佳 | **30** | 2 | 1 | 5 | 22 |
 
-Base 的错误主要是“证据已经召回，但调用拓扑仍是串行”：32 个错误中有 22 个属于拓扑错+完整召回。Serial s50 虽有 70% Comparison Exact，但 30 个错误中仍有 20 个属于同类状态，证明它尚未接受 Compare teacher。到 Serial s100 或 MOPD s100，这类错误几乎消失，错误集中到“正确 `[2]` + 完整召回后仍答错”。
+Base 的错误主要是“证据已经召回，但调用拓扑仍是串行”：32 个错误中有 22 个属于拓扑错+完整召回。Exact-only 更极端，Comparison Strategy 为 0，33 个错误全部拓扑错误，其中 24 个已经完整召回；仅奖励答案不会形成并行调用习惯。Serial s50 虽有 70% Comparison Exact，但 30 个错误中仍有 20 个属于同类状态，证明它尚未接受 Compare teacher。到 Serial s100 或 MOPD s100，这类错误几乎消失，错误集中到“正确 `[2]` + 完整召回后仍答错”。
 
 ### 8.2 可重叠过程故障计数
 
 | 模型 | checkpoint 定位 | 拓扑错误 | gold-title 召回不全 | 完整召回但答案错 | 格式错误 |
 |---|---|---:|---:|---:|---:|
 | Base | 基线 | **29** | 7 | 25 | 8 |
+| Exact-only s50 | 仅答案奖励消融 | **33** | 9 | 24 | 6 |
 | GRPO s100 | 答案/策略均最佳 | 2 | 7 | 26 | 3 |
 | Compare teacher s25 | Teacher 答案/策略最佳 | 2 | 6 | 24 | 1 |
 | Serial OPD s50 | Serial 答案最佳 | **25** | 5 | 25 | 4 |
@@ -357,6 +371,12 @@ GRPO/MOPD 已召回完整证据，却把“授权文件”回答成“签署人�
 - 缺点：把独立 Comparison 查询串行化，Bridge 常单跳停止；答案正确经常依赖记忆或偶然路径。
 - 定位：能力下限与“只看答案会误判策略”的关键基线。
 
+### Exact-only s50
+
+- 优点：验证严格最终答案奖励能够维持部分问答能力，Comparison Exact 仍为 67%。
+- 缺点：Overall Strategy 只有 23.5%，Comparison Strategy 为 0；Bridge 的召回与串行策略也低于 Base，说明稀疏答案信号不足以约束检索过程。
+- 定位：证明任务最终分数不能替代召回、拓扑和格式过程奖励的关键消融。
+
 ### 通用 GRPO s100
 
 - 优点：单 student 综合最佳；过程奖励直接把 Bridge/Compare 两种拓扑都训练到较高水平。
@@ -409,7 +429,8 @@ GRPO/MOPD 已召回完整证据，却把“授权文件”回答成“签署人�
 
 ## 14. 数据口径与限制
 
-- 五组输出的问题集合、题型和顺序已经对齐；最终指标来自固定 200 题 greedy 评测。
+- 各组输出的问题集合、题型和顺序已经对齐；最终指标来自固定 200 题 greedy 评测。
+- Exact-only 使用移除显式策略提示的消融数据，并且训练奖励只保留严格答案命中；因此它用于回答“只有最终答案信号是否足够”，不是只改变一个 reward 权重的严格单变量实验。
 - Base 归档来自较早评测实现，本文按当前项目的 Strict/alias 规则重新核验 prediction 与 gold，使其与后续 summary 口径一致。
 - “路由双教师”是两组专项 checkpoint 按题型拼接的统计参考，不等同于单模型参数量和推理成本；文中同时给出两位 teacher 的交叉路由成绩。
 - 第 9 节真实案例主要使用行为峰值 MOPD s100 / Serial s100，以解释多策略保持；答案主结果仍采用各自 s50。

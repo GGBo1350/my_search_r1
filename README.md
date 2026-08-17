@@ -64,6 +64,7 @@ Checkpoint 选择同时报告“答案最佳”和“策略最佳”：答案优
 | 模型 / checkpoint | 定位 | Exact | F1≥0.5 | Mean F1 | Strategy | Recall | Format | Calls |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Qwen3-4B Base | 基线 | 0.560 | 0.725 | 0.687 | 0.405 | 0.840 | 0.930 | 1.88 |
+| Exact-only 50-step | 仅严格答案奖励的消融 | 0.535 | 0.690 | 0.657 | 0.235 | 0.753 | 0.910 | 1.68 |
 | **GRPO s100** | 答案/策略共同最佳 | **0.590** | 0.755 | **0.720** | **0.915** | **0.878** | 0.955 | 2.07 |
 | Routed teachers | 两专家按题型组合的参考值 | **0.620** | **0.780** | **0.744** | 0.895 | 0.873 | **0.955** | 2.08 |
 | Serial OPD s50 | Serial 答案最佳 | 0.565 | 0.725 | 0.690 | 0.530 | 0.870 | 0.935 | 2.09 |
@@ -73,7 +74,8 @@ Checkpoint 选择同时报告“答案最佳”和“策略最佳”：答案优
 
 主要发现：
 
-- GRPO s100 是综合最好的单 student；过程奖励把 Base 的 Strategy 从 `0.405` 提升到 `0.915`。
+- Exact-only 在 Comparison 上仍有 `0.670` Exact，但正确 `[2]` 并行率为 `0`；只优化最终答案无法教会检索拓扑。
+- GRPO s100 是综合最好的单 student；相比 Exact-only，Exact 提升 `5.5 pp`，Strategy 提升 `68 pp`。
 - MOPD s50 是蒸馏路线答案峰值，距离 GRPO 仅 `0.5 pp` Exact；MOPD s100 是行为峰值，Strategy 为 `0.890`。
 - Serial s50 的 Exact 为 `0.565`，但 Strategy 只有 `0.530`；到 s100 学会 Comparison 并行后，Bridge Strategy 从 `0.810` 降到 `0.690`，显示顺序干扰。
 - MOPD s100 相比 Serial s100 将整体 Strategy 提高 `6.5 pp`、Bridge Strategy 提高 `14 pp`，说明按题型混合路由可缓解最后教师偏置。
@@ -84,6 +86,7 @@ Checkpoint 选择同时报告“答案最佳”和“策略最佳”：答案优
 | 模型 / checkpoint | Bridge Exact / Strategy | Comparison Exact / Strategy |
 | --- | ---: | ---: |
 | Base | 0.440 / 0.630 | 0.680 / 0.180 |
+| Exact-only 50-step | 0.400 / 0.470 | 0.670 / 0.000 |
 | GRPO s100 | **0.510 / 0.870** | 0.670 / 0.960 |
 | Routed teachers | **0.540 / 0.810** | **0.700 / 0.980** |
 | Serial OPD s50 | 0.430 / 0.810 | **0.700 / 0.250** |
